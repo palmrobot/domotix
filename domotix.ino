@@ -1,26 +1,27 @@
+/* #include <avr/pgmspace.h> */
 #include <SPI.h>
 #include <Time.h>
 #include <SD.h>
 #include <Ethernet.h>
 #include <LiquidCrystal.h>
 
-/* #define DEBUG */
+#define DEBUG
 
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
-#define PIN_A0		A0
-#define PIN_A1		A1
-#define PIN_A2		A2
+#define PIN_GARAGE_LUMIERE		A0
+#define PIN_GARAGE_LUMIERE_ETABLI	A1
+#define PIN_CELLIER_LUMIERE		A2
 #define PIN_A3		A3
 #define PIN_A4		A4
 #define PIN_A5		A5
 
-#define PIN_9		9
-#define PIN_8		8
-#define PIN_7		7
-#define PIN_6		6
-#define PIN_5		5
+#define PIN_GARAGE_DROITE		9
+#define PIN_GARAGE_GAUCHE		8
+#define PIN_GARAGE_FENETRE		7
+#define PIN_CELLIER_PORTE_EXT		6
+#define PIN_CELLIER_PORTE_INT		5
 #define CS_PIN_SDCARD   4
 #define PIN_3		3
 #define PIN_2		2
@@ -82,6 +83,20 @@ code_t g_code[] = { {"Fermee", 6, "Ouverte", 7},  /* code 1 */
 EthernetServer g_server(9090);
 EthernetClient g_client;
 
+typedef struct state_t
+{
+    uint8_t old;
+    uint8_t curr;
+};
+
+state_t g_garage_droite;
+state_t g_garage_gauche;
+state_t g_garage_fenetre;
+state_t g_garage_lumiere_etabli;
+state_t g_garage_lumiere;
+state_t g_cellier_light;
+state_t g_cellier_porte_ext;
+state_t g_cellier_porte_int;
 
 #define WEB_GET			1
 #define WEB_EOL			2
@@ -93,7 +108,7 @@ uint8_t g_page_web   = 0;
 uint16_t g_req_count = 0;
 File g_file_html;
 time_t g_prevDisplay = 0;
-char g_bufferTxt[80];
+char g_bufferTxt[64];
 
 /********************************************************/
 /*      NTP			                        */
@@ -117,19 +132,26 @@ byte g_packetBuffer[NTP_PACKET_SIZE];
 /********************************************************/
 /*      CONSTANT STRING		                        */
 /********************************************************/
-const char g_txtError404[] PROGMEM = "HTTP/1.1 404 Not Found";
+/* const char g_txtError404[] PROGMEM = "HTTP/1.1 404 Not Found"; */
 
 
 
 /********************************************************/
 /*      Init			                        */
 /********************************************************/
+void Serialprintln(const char *text)
+{
+    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
+
+    Serial.println(g_bufferTxt);
+}
+
 void setup(void)
 {
     /* init Process */
     g_process_serial   = PROCESS_SERIAL_ON;
     g_process_ethernet = PROCESS_ETHERNET_ON;
-    g_process_domotix  = PROCESS_DOMOTIX_OFF;
+    g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
 
     /* initialize serial communications at 115200 bps */
@@ -151,13 +173,22 @@ void setup(void)
     delay(100);
 
     /* Init Port In/Out */
-    /*pinMode(PIN_LED, OUTPUT);*/
+    pinMode(PIN_GARAGE_LUMIERE, INPUT);
+    pinMode(PIN_GARAGE_LUMIERE_ETABLI, INPUT);
+    pinMode(PIN_CELLIER_LUMIERE, INPUT);
+    pinMode(PIN_GARAGE_DROITE, INPUT);
+    pinMode(PIN_GARAGE_GAUCHE, INPUT);
+    pinMode(PIN_GARAGE_FENETRE, INPUT);
+    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
+    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
 
     /* Init global var */
-
-
 #ifdef DEBUG
-    Serial.print("Init OK\r\n");
+
+    Serial.print("Free RAM: ");
+    Serial.println(FreeRam());
+
+    Serial.println("Init OK");
 #endif
 }
 
@@ -525,7 +556,9 @@ time_t getNtpTime(void)
 	    return secsSince1900 - 2208988800UL + TIMEZONE * SECS_PER_HOUR;
 	}
     }
+#ifdef DEBUG
     Serial.println("No NTP :-(");
+#endif
     return 0;
 }
 
@@ -557,35 +590,20 @@ void sendNTPpacket(IPAddress &address)
     g_Udp.endPacket();
 }
 
-void printwebln(char *text)
+void respwebln(const char *text)
 {
-    strcpy_P(buffer,text);
-   strcpy_P(buffer, (PGM_P)pgm_read_word(&(dayNames_P[day])));
+    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
 
-    if (ln == 1)
-    {
-	g_client.println(buffer);
-    }
-    else
-    {
-	g_client.print(buffer);
-    }
+    g_client.println(g_bufferTxt);
 }
 
-void printserial(char *text, uint8_t ln)
+void respweb(const char *text)
 {
-    char buffer[80];
-    strcpy_P(buffer,text);
+    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
 
-    if (ln == 1)
-    {
-	g_client.println(buffer);
-    }
-    else
-    {
-	g_client.print(buffer);
-    }
+    g_client.print(g_bufferTxt);
 }
+
 
 
 /********************************************************/
@@ -652,7 +670,7 @@ void process_ethernet(void)
 			/* EOL */
 			g_page_web |= WEB_EOL;
 #ifdef DEBUG
-			Serial.print("End of Line ");
+			Serial.println("End of Line ");
 #endif
 		    }
 
@@ -683,7 +701,7 @@ void process_ethernet(void)
 			    if (end_filename != NULL)
 				end_filename[0] = '\0';
 #ifdef DEBUG
-			    Serial.print("found file:");Serial.println(filename);
+			    Serial.println("found file:");Serial.println(filename);
 #endif
 
 			    /* Try open file to send*/
@@ -691,10 +709,12 @@ void process_ethernet(void)
 			    if (g_file_html)
 			    {
 				/* send 200 OK */
+				/* respwebln("HTTP/1.1 200 OK"); */
 				g_client.println("HTTP/1.1 200 OK");
 				if (strstr(filename, ".htm") != 0)
 				{
 				    g_client.println("Content-Type: text/html");
+				    /* respwebln(PSTR("Content-Type: text/html")); */
 
 				    /* end of header */
 				    g_client.println();
@@ -705,20 +725,20 @@ void process_ethernet(void)
 				}
 				else if (strstr(filename, ".css") != 0)
 				{
-				    g_client.println("Content-Type: text/css");
+				    /* respwebln(PSTR("Content-Type: text/css")); */
 				}
 				else if (strstr(filename, ".jpg") != 0)
 				{
-				    g_client.println("Content-Type: image/jpeg");
-				    /* g_client.println("Cache-Control: max-age=2592000"); */
+				    /* respwebln(PSTR("Content-Type: image/jpeg")); */
+				    /* respwebln(PSTR("Cache-Control: max-age=2592000")); */
 				}
 				else if (strstr(filename, ".ico") != 0)
 				{
-				    g_client.println("Content-Type: image/x-icon");
-				    /* g_client.println("Cache-Control: max-age=2592000"); */
+				    /* respwebln(PSTR("Content-Type: image/x-icon")); */
+				    /* respwebln(PSTR("Cache-Control: max-age=2592000")); */
 				}
 				else
-				    g_client.println("Content-Type: text");
+				    /* g_client.println("Content-Type: text"); */
 
 				/* end of header */
 				g_client.println();
@@ -730,6 +750,7 @@ void process_ethernet(void)
 			    else
 			    {
 				g_client.println("HTTP/1.1 404 Not Found");
+				/* respwebln(g_txtError404); */
 				/* g_client.println("Content-Type: text/html"); */
 				g_client.println();
 				/* g_client.println("<h2>Domotix Error: File Not Found!</h2>"); */
@@ -740,6 +761,7 @@ void process_ethernet(void)
 			else
 			{
 			    g_client.println("HTTP/1.1 404 Not Found");
+			    /* respwebln(g_txtError404); */
 			    /* g_client.println("Content-Type: text/html"); */
 			    g_client.println();
 			    /* g_client.println("<h2>Domotix Error: GET /  Not Found!</h2>"); */
@@ -756,13 +778,41 @@ void process_ethernet(void)
     }
 }
 
+/*
+    pinMode(PIN_GARAGE_LUMIERE, INPUT);
+    pinMode(PIN_GARAGE_LUMIERE_ETABLI, INPUT);
+    pinMode(PIN_CELLIER_LUMIERE, INPUT);
+    pinMode(PIN_GARAGE_DROITE, INPUT);
+    pinMode(PIN_GARAGE_GAUCHE, INPUT);
+    pinMode(PIN_GARAGE_FENETRE, INPUT);
+    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
+    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
+*/
 
 void process_domotix(void)
 {
     if (g_process_domotix != PROCESS_DOMOTIX_OFF)
     {
+	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
+	if (g_garage_droite.curr != g_garage_droite.old)
+	{
+	    g_garage_droite.old = g_garage_droite.curr;
+	    /* write in file
+	     * Format :
+	     * 
+	     */
+	    Serial.print("Garage droite :");Serial.println(g_garage_droite.curr);
+	}
+	delay(250);
 
 
+/* state_t g_garage_gauche = {0, 0}; */
+/* state_t g_garage_fenetre = {0, 0}; */
+/* state_t g_garage_lumiere_etabli = {0, 0}; */
+/* state_t g_garage_lumiere = {0, 0}; */
+/* state_t g_cellier_light = {0, 0}; */
+/* state_t g_cellier_porte_ext = {0, 0}; */
+/* state_t g_cellier_porte_int = {0, 0}; */
 
     }
 }
