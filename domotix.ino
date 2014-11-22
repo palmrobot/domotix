@@ -1,4 +1,4 @@
-/* #include <avr/pgmspace.h> */
+#include <avr/pgmspace.h>
 #include <SPI.h>
 #include <Time.h>
 #include <SD.h>
@@ -65,38 +65,41 @@ char g_root_filename[] = "index.htm";
 
 typedef struct code_t
 {
-    const char *name0;
-    uint8_t len0;
-    const char *name1;
-    uint8_t len1;
+    const char *name[2];
 };
 
 #define WEB_CODE_1		'1'
 #define WEB_CODE_2		'2'
 #define WEB_CODE_3		'3'
 
-code_t g_code[] = { {"Fermee", 6, "Ouverte", 7},  /* code 1 */
-		    {"Eteinte", 7, "Allumee", 7}, /* code 2 */
-		    {"ok", 2, "ko", 2} }; /* code 3 */
+code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
+		    {"Allumee", "Eteinte"}, /* code 2 */
+		    {"ko", "ok"} }; /* code 3 */
 
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
 
-typedef struct state_t
+typedef struct state_uint8_t
 {
     uint8_t old;
     uint8_t curr;
 };
 
-state_t g_garage_droite;
-state_t g_garage_gauche;
-state_t g_garage_fenetre;
-state_t g_garage_lumiere_etabli;
-state_t g_garage_lumiere;
-state_t g_cellier_light;
-state_t g_cellier_porte_ext;
-state_t g_cellier_porte_int;
+typedef struct state_int_t
+{
+    int old;
+    int curr;
+};
+
+state_uint8_t g_garage_gauche; /* A */
+state_uint8_t g_garage_droite; /* B */
+state_uint8_t g_garage_fenetre; /* C */
+state_int_t g_garage_lumiere_etabli; /* G */
+state_int_t g_garage_lumiere; /* F */
+state_int_t g_cellier_light; /* J */
+state_uint8_t g_cellier_porte_ext; /* H */
+state_uint8_t g_cellier_porte_int; /* I */
 
 #define WEB_GET			1
 #define WEB_EOL			2
@@ -108,7 +111,6 @@ uint8_t g_page_web   = 0;
 uint16_t g_req_count = 0;
 File g_file_html;
 time_t g_prevDisplay = 0;
-char g_bufferTxt[64];
 
 /********************************************************/
 /*      NTP			                        */
@@ -132,20 +134,13 @@ byte g_packetBuffer[NTP_PACKET_SIZE];
 /********************************************************/
 /*      CONSTANT STRING		                        */
 /********************************************************/
-/* const char g_txtError404[] PROGMEM = "HTTP/1.1 404 Not Found"; */
+const char g_txtError404[] PROGMEM = "HTTP/1.1 404 Not Found";
 
 
 
 /********************************************************/
 /*      Init			                        */
 /********************************************************/
-void Serialprintln(const char *text)
-{
-    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
-
-    Serial.println(g_bufferTxt);
-}
-
 void setup(void)
 {
     /* init Process */
@@ -173,9 +168,6 @@ void setup(void)
     delay(100);
 
     /* Init Port In/Out */
-    pinMode(PIN_GARAGE_LUMIERE, INPUT);
-    pinMode(PIN_GARAGE_LUMIERE_ETABLI, INPUT);
-    pinMode(PIN_CELLIER_LUMIERE, INPUT);
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
     pinMode(PIN_GARAGE_FENETRE, INPUT);
@@ -185,11 +177,43 @@ void setup(void)
     /* Init global var */
 #ifdef DEBUG
 
-    Serial.print("Free RAM: ");
+    PgmPrint("Free RAM: ");
     Serial.println(FreeRam());
 
-    Serial.println("Init OK");
+    PgmPrintln("Init OK");
 #endif
+}
+
+/** Store and print a string in flash memory.*/
+#define PgmClientPrint(x) ClientPrint_P(PSTR(x))
+
+/** Store and print a string in flash memory followed by a CR/LF.*/
+#define PgmClientPrintln(x) ClientPrintln_P(PSTR(x))
+
+/*
+ * %Print a string in flash memory to the serial port.
+ *
+ * \param[in] str Pointer to string stored in flash memory.
+ */
+void ClientPrint_P(PGM_P str)
+{
+    uint8_t c;
+
+    for (c = pgm_read_byte(str); c != 0; str++)
+    {
+	g_client.print(c);
+    }
+}
+
+/*
+ * %Print a string in flash memory followed by a CR/LF.
+ *
+ * \param[in] str Pointer to string stored in flash memory.
+ */
+void ClientPrintln_P(PGM_P str)
+{
+  ClientPrint_P(str);
+  g_client.println();
 }
 
 
@@ -199,7 +223,6 @@ void setup(void)
 
 void deal_with_code(char type, uint8_t code)
 {
-    uint8_t current_state;
     code_t *ptr_code;
 
     switch (code)
@@ -226,179 +249,91 @@ void deal_with_code(char type, uint8_t code)
     {
 	case 'A':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(ptr_code->name[g_garage_gauche.curr]);
 	}break;
 	case 'B':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(ptr_code->name[g_garage_droite.curr]);
 	}break;
 	case 'C':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(ptr_code->name[g_garage_fenetre.curr]);
 	}break;
 	case 'D':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'E':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'F':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(g_garage_lumiere.curr);
 	}break;
 	case 'G':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(g_garage_lumiere_etabli.curr);
 	}break;
 	case 'H':
 	{
-	    current_state = 1;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(ptr_code->name[g_cellier_porte_ext.curr]);
 	}break;
 	case 'I':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(ptr_code->name[g_cellier_porte_int.curr]);
 	}break;
 	case 'J':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+	    g_client.print(g_cellier_light.curr);
 	}break;
 	case 'K':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'L':
 	{
-	    current_state = 1;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'M':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'N':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'O':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'P':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'Q':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'R':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'S':
 	{
-	    current_state = 1;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'T':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'U':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'V':
 	{
-	    current_state = 0;
-	    if (current_state == 1)
-		g_client.write((const uint8_t*)ptr_code->name1, ptr_code->len1);
-	    else
-		g_client.write((const uint8_t*)ptr_code->name0, ptr_code->len0);
+
 	}break;
 	case 'W':
 	{
@@ -590,22 +525,6 @@ void sendNTPpacket(IPAddress &address)
     g_Udp.endPacket();
 }
 
-void respwebln(const char *text)
-{
-    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
-
-    g_client.println(g_bufferTxt);
-}
-
-void respweb(const char *text)
-{
-    strcpy_P(g_bufferTxt, (char*)pgm_read_word(text));
-
-    g_client.print(g_bufferTxt);
-}
-
-
-
 /********************************************************/
 /*      Process                                         */
 /********************************************************/
@@ -670,7 +589,7 @@ void process_ethernet(void)
 			/* EOL */
 			g_page_web |= WEB_EOL;
 #ifdef DEBUG
-			Serial.println("End of Line ");
+		        PgmPrintln("End of Line ");
 #endif
 		    }
 
@@ -701,7 +620,7 @@ void process_ethernet(void)
 			    if (end_filename != NULL)
 				end_filename[0] = '\0';
 #ifdef DEBUG
-			    Serial.println("found file:");Serial.println(filename);
+			    PgmPrintln("found file:");Serial.println(filename);
 #endif
 
 			    /* Try open file to send*/
@@ -778,17 +697,6 @@ void process_ethernet(void)
     }
 }
 
-/*
-    pinMode(PIN_GARAGE_LUMIERE, INPUT);
-    pinMode(PIN_GARAGE_LUMIERE_ETABLI, INPUT);
-    pinMode(PIN_CELLIER_LUMIERE, INPUT);
-    pinMode(PIN_GARAGE_DROITE, INPUT);
-    pinMode(PIN_GARAGE_GAUCHE, INPUT);
-    pinMode(PIN_GARAGE_FENETRE, INPUT);
-    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
-    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
-*/
-
 void process_domotix(void)
 {
     if (g_process_domotix != PROCESS_DOMOTIX_OFF)
@@ -799,21 +707,88 @@ void process_domotix(void)
 	    g_garage_droite.old = g_garage_droite.curr;
 	    /* write in file
 	     * Format :
-	     * 
+	     *
 	     */
-	    Serial.print("Garage droite :");Serial.println(g_garage_droite.curr);
+	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
 	}
-	delay(250);
 
+	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
+	if (g_garage_gauche.curr != g_garage_gauche.old)
+	{
+	    g_garage_gauche.old = g_garage_gauche.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
+	}
 
-/* state_t g_garage_gauche = {0, 0}; */
-/* state_t g_garage_fenetre = {0, 0}; */
-/* state_t g_garage_lumiere_etabli = {0, 0}; */
-/* state_t g_garage_lumiere = {0, 0}; */
-/* state_t g_cellier_light = {0, 0}; */
-/* state_t g_cellier_porte_ext = {0, 0}; */
-/* state_t g_cellier_porte_int = {0, 0}; */
+	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
+	if (g_cellier_porte_ext.curr != g_cellier_porte_ext.old)
+	{
+	    g_cellier_porte_ext.old = g_cellier_porte_ext.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage porte ext :");Serial.println(g_cellier_porte_ext.curr);
+	}
 
+	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
+	if (g_garage_fenetre.curr != g_garage_fenetre.old)
+	{
+	    g_garage_fenetre.old = g_garage_fenetre.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
+	}
+
+	g_cellier_porte_int.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
+	if (g_cellier_porte_int.curr != g_cellier_porte_int.old)
+	{
+	    g_cellier_porte_int.old = g_cellier_porte_int.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage port int :");Serial.println(g_cellier_porte_int.curr);
+	}
+
+	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
+	if (g_garage_lumiere_etabli.curr != g_garage_lumiere_etabli.old)
+	{
+	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage luniere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
+	}
+
+	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
+	if (g_garage_lumiere.curr != g_garage_lumiere.old)
+	{
+	    g_garage_lumiere.old = g_garage_lumiere.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
+	}
+
+	g_cellier_light.curr =  analogRead(PIN_CELLIER_LUMIERE);
+	if (g_cellier_light.curr != g_cellier_light.old)
+	{
+	    g_cellier_light.old = g_cellier_light.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_light.curr);
+	}
+	delay(100);
     }
 }
 
