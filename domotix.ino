@@ -5,7 +5,7 @@
 #include <Ethernet.h>
 #include <LiquidCrystal.h>
 
-#define DEBUG
+/* #define DEBUG */
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -55,13 +55,10 @@ uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x00, 0xFF, 0x86};
 uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
 
 #define LINE_MAX_LEN			64
-#define LINE_START_BUFF			1
-char g_line[LINE_MAX_LEN+1];
+char g_line[LINE_MAX_LEN + 1];
 
-#define BUFF_MAX_SIZE			200
+#define BUFF_MAX_SIZE			100
 uint8_t g_buff[BUFF_MAX_SIZE];
-
-char g_root_filename[] = "index.htm";
 
 typedef struct code_t
 {
@@ -77,7 +74,7 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 		    {"ko", "ok"} }; /* code 3 */
 
 
-EthernetServer g_server(9090);
+EthernetServer g_server(80);
 EthernetClient g_client;
 
 typedef struct state_uint8_t
@@ -92,6 +89,14 @@ typedef struct state_int_t
     int curr;
 };
 
+#define FILE_MAX_LEN			13
+typedef struct file_web_t
+{
+    File  fd;
+    char name[FILE_MAX_LEN + 1];
+};
+
+
 state_uint8_t g_garage_gauche; /* A */
 state_uint8_t g_garage_droite; /* B */
 state_uint8_t g_garage_fenetre; /* C */
@@ -100,23 +105,25 @@ state_int_t g_garage_lumiere; /* F */
 state_int_t g_cellier_light; /* J */
 state_uint8_t g_cellier_porte_ext; /* H */
 state_uint8_t g_cellier_porte_int; /* I */
+state_uint8_t g_template_porte; /*  */
+state_uint8_t g_template_fenetre; /*  */
+state_int_t g_template_lumiere; /*  */
 
 #define WEB_GET			1
 #define WEB_EOL			2
 #define WEB_END			4
-#define WEB_GET_ROOT		8
 #define WEB_ERROR		16
 
 uint8_t g_page_web   = 0;
 uint16_t g_req_count = 0;
-File g_file_html;
 time_t g_prevDisplay = 0;
+file_web_t g_filename;
 
 /********************************************************/
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			2
+#define TIMEZONE			1
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
@@ -134,7 +141,6 @@ byte g_packetBuffer[NTP_PACKET_SIZE];
 /********************************************************/
 /*      CONSTANT STRING		                        */
 /********************************************************/
-const char g_txtError404[] PROGMEM = "HTTP/1.1 404 Not Found";
 
 
 
@@ -149,8 +155,10 @@ void setup(void)
     g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
 
+#ifdef DEBUG
     /* initialize serial communications at 115200 bps */
     Serial.begin(115200);
+#endif
 
     /* start the Ethernet connection and the server: */
     Ethernet.begin(g_mac_addr, g_ip_addr);
@@ -175,8 +183,11 @@ void setup(void)
     pinMode(PIN_CELLIER_PORTE_INT, INPUT);
 
     /* Init global var */
-#ifdef DEBUG
+    g_template_porte.curr = 1;
+    g_template_fenetre.curr = 1;
+    g_template_lumiere.curr = 0;
 
+#ifdef DEBUG
     PgmPrint("Free RAM: ");
     Serial.println(FreeRam());
 
@@ -199,9 +210,12 @@ void ClientPrint_P(PGM_P str)
 {
     uint8_t c;
 
-    for (c = pgm_read_byte(str); c != 0; str++)
+    c = (uint8_t)pgm_read_byte(str);
+    while (c != 0)
     {
-	g_client.print(c);
+	g_client.write(c);
+	str++;
+	c = (uint8_t)pgm_read_byte(str);
     }
 }
 
@@ -221,7 +235,7 @@ void ClientPrintln_P(PGM_P str)
 /*      Web                                             */
 /********************************************************/
 
-void deal_with_code(char type, uint8_t code)
+void deal_with_code(uint8_t type, uint8_t code)
 {
     code_t *ptr_code;
 
@@ -247,45 +261,80 @@ void deal_with_code(char type, uint8_t code)
 
     switch (type)
     {
+	case 'a':
+	{
+	    digitalClockDisplay();
+	}break;
 	case 'A':
 	{
-	    g_client.print(ptr_code->name[g_garage_gauche.curr]);
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_gauche.curr],
+		strlen(ptr_code->name[g_garage_gauche.curr]));
 	}break;
 	case 'B':
 	{
-	    g_client.print(ptr_code->name[g_garage_droite.curr]);
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_droite.curr],
+		strlen(ptr_code->name[g_garage_droite.curr]));
 	}break;
 	case 'C':
 	{
-	    g_client.print(ptr_code->name[g_garage_fenetre.curr]);
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_fenetre.curr],
+		strlen(ptr_code->name[g_garage_fenetre.curr]));
 	}break;
 	case 'D':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_fenetre.curr],
+		strlen(ptr_code->name[g_garage_fenetre.curr]));
 	}break;
 	case 'E':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'F':
 	{
-	    g_client.print(g_garage_lumiere.curr);
+	    if (code == WEB_CODE_3)
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_garage_lumiere.curr],
+		    strlen(ptr_code->name[g_garage_lumiere.curr]));
+	    }
+	    else
+	    {
+		g_client.print(g_garage_lumiere.curr);
+	    }
 	}break;
 	case 'G':
 	{
-	    g_client.print(g_garage_lumiere_etabli.curr);
+	    if (code == WEB_CODE_3)
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_garage_lumiere_etabli.curr],
+		    strlen(ptr_code->name[g_garage_lumiere_etabli.curr]));
+	    }
+	    else
+	    {
+		g_client.print(g_garage_lumiere_etabli.curr);
+	    }
 	}break;
 	case 'H':
 	{
-	    g_client.print(ptr_code->name[g_cellier_porte_ext.curr]);
+	    g_client.write((uint8_t*)ptr_code->name[g_cellier_porte_ext.curr],
+		strlen(ptr_code->name[g_cellier_porte_ext.curr]));
 	}break;
 	case 'I':
 	{
-	    g_client.print(ptr_code->name[g_cellier_porte_int.curr]);
+	    g_client.write((uint8_t*)ptr_code->name[g_cellier_porte_int.curr],
+		strlen(ptr_code->name[g_cellier_porte_int.curr]));
 	}break;
 	case 'J':
 	{
-	    g_client.print(g_cellier_light.curr);
+	    if (code == WEB_CODE_3)
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_cellier_light.curr],
+		    strlen(ptr_code->name[g_cellier_light.curr]));
+	    }
+	    else
+	    {
+		g_client.print(g_cellier_light.curr);
+	    }
 	}break;
 	case 'K':
 	{
@@ -297,54 +346,78 @@ void deal_with_code(char type, uint8_t code)
 	}break;
 	case 'M':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'N':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
+		strlen(ptr_code->name[g_template_fenetre.curr]));
 	}break;
 	case 'O':
 	{
-
+	    if (code == WEB_CODE_3)
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_template_lumiere.curr],
+		    strlen(ptr_code->name[g_template_lumiere.curr]));
+	    }
+	    else
+	    {
+		g_client.print(g_template_lumiere.curr);
+	    }
 	}break;
 	case 'P':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'Q':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'R':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'S':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
+		strlen(ptr_code->name[g_template_porte.curr]));
 	}break;
 	case 'T':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
+		strlen(ptr_code->name[g_template_fenetre.curr]));
 	}break;
 	case 'U':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
+		strlen(ptr_code->name[g_template_fenetre.curr]));
 	}break;
 	case 'V':
 	{
-
+	    if (code == WEB_CODE_3)
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_template_lumiere.curr],
+		    strlen(ptr_code->name[g_template_lumiere.curr]));
+	    }
+	    else
+	    {
+		g_client.print(g_template_lumiere.curr);
+	    }
 	}break;
 	case 'W':
 	{
-	    digitalClockDisplay();
+
 	}
     }
 }
 
 void send_file_to_client(File *file)
 {
-    uint8_t index;
+    uint16_t index;
     uint8_t code;
     uint8_t type;
 
@@ -379,19 +452,17 @@ void send_file_to_client(File *file)
     }
     if (index > 0)
 	g_client.write(g_buff, index);
-
-    file->close();
 }
 
 
-void send_resp_to_client(File *file)
+void send_resp_to_client(File *fd)
 {
     uint16_t index;
 
     index = 0;
-    while (file->available())
+    while (fd->available())
     {
-	g_buff[index] = file->read();
+	g_buff[index] = fd->read();
 	index++;
 	if (index >= BUFF_MAX_SIZE)
 	{
@@ -401,13 +472,13 @@ void send_resp_to_client(File *file)
     }
     if (index > 0)
 	g_client.write(g_buff, index);
-
-    file->close();
 }
 
 /********************************************************/
 /*      NTP functions                                   */
 /********************************************************/
+
+#ifdef DEBUG
 void digitalClockDisplaySerial(void)
 {
     Serial.print(hour());
@@ -430,6 +501,7 @@ void printDigitsSerial(int digits)
 	Serial.print('0');
     Serial.print(digits);
 }
+#endif
 
 void digitalClockDisplay(void)
 {
@@ -444,7 +516,6 @@ void digitalClockDisplay(void)
     g_client.print(month());
     g_client.print("/");
     g_client.print(year());
-    g_client.println();
 }
 
 void printDigits(int digits)
@@ -529,6 +600,7 @@ void sendNTPpacket(IPAddress &address)
 /*      Process                                         */
 /********************************************************/
 
+#ifdef DEBUG
 void process_serial(void)
 {
     uint16_t count;
@@ -554,22 +626,28 @@ void process_serial(void)
 	}
     }
 }
+#endif
 
 void process_ethernet(void)
 {
     uint8_t count;
-    char *filename;
     char *end_filename;
+    char eat_req;
+    int exit;
 
     if (g_process_ethernet != PROCESS_ETHERNET_OFF)
     {
 	g_client = g_server.available();
 	if (g_client)
 	{
+#ifdef DEBUG
+	    PgmPrintln("New Connection");
+#endif
 	    g_page_web  = 0;
 	    g_req_count = 0;
+	    exit = 0;
 
-	    while (g_client.connected())
+	    while (g_client.connected() && (exit == 0))
 	    {
 		if (g_client.available())
 		{
@@ -582,117 +660,144 @@ void process_ethernet(void)
 		    if ((g_line[g_req_count] == '\r') ||
 			(g_line[g_req_count] == '\n'))
 		    {
+#ifdef DEBUG
+		        PgmPrintln("");
+#endif
 			/* Got a complete line */
 			/* Set '\0' to the end of buffer for string treatment */
 			g_line[g_req_count] = '\0';
 
 			/* EOL */
 			g_page_web |= WEB_EOL;
-#ifdef DEBUG
-		        PgmPrintln("End of Line ");
-#endif
+
+			/* Buffer line is used, then go to the end
+			 * to eat the end of the request
+			 */
+			g_req_count = LINE_MAX_LEN;
+
 		    }
 
 		    g_req_count++;
 
 		    if (g_req_count >= LINE_MAX_LEN)
 		    {
-			/* at the end of buffer until end of line */
-			g_req_count--;
+			/* Line is too long, eat all the request and return error */
+			while (g_client.available())
+			{
+			    eat_req = g_client.read();
+			}
+
+			exit = 1;
+		    }
+		}
+		else
+		{
+		    exit = 1;
+		}
+	    }
+
+	    /********** Parsing Line received **************/
+	    if ((g_page_web & WEB_EOL) == WEB_EOL)
+	    {
+		if (strstr(g_line, "GET /") != NULL)
+		{
+		    g_filename.name[0] = '\0';
+
+		    if (g_line[5] == ' ')
+		    {
+			/* No file specified, then use the default one */
+			strcpy(g_filename.name,"index.htm");
+
+			g_filename.fd = SD.open(g_filename.name, FILE_READ);
+		    }
+		    else
+		    {
+			end_filename = strstr(g_line," HTTP");
+			if (end_filename != NULL)
+			{
+			    *end_filename = '\0';
+
+			    if (strlen(g_line+5) < FILE_MAX_LEN)
+			    {
+				strcpy(g_filename.name, &g_line[5]);
+
+#ifdef DEBUG
+				PgmPrint("found file: ");Serial.println(g_filename.name);
+#endif
+				g_filename.fd = SD.open(g_filename.name, FILE_READ);
+			    }
+			}
 		    }
 
-		    /********** Parsing Line received **************/
-		    if ((g_page_web & WEB_EOL) == WEB_EOL)
+		    if (g_filename.fd.available())
 		    {
-		        if (strstr(g_line, "GET /") != 0)
+			/* send 200 OK */
+			PgmClientPrintln("HTTP/1.1 200 OK");
+
+			if (strstr(g_filename.name, ".htm") != NULL)
 			{
-			    if (g_line[5] == ' ')
-			    {
-				filename = g_root_filename;
-				g_page_web |= WEB_GET_ROOT;
-			    }
-			    else
-			    {
-				filename = g_line + 5;
-			    }
+			    PgmClientPrintln("Content-Type: text/html");
 
-			    end_filename = strstr(g_line," HTTP");
-			    if (end_filename != NULL)
-				end_filename[0] = '\0';
-#ifdef DEBUG
-			    PgmPrintln("found file:");Serial.println(filename);
-#endif
-
-			    /* Try open file to send*/
-			    g_file_html = SD.open(filename);
-			    if (g_file_html)
-			    {
-				/* send 200 OK */
-				/* respwebln("HTTP/1.1 200 OK"); */
-				g_client.println("HTTP/1.1 200 OK");
-				if (strstr(filename, ".htm") != 0)
-				{
-				    g_client.println("Content-Type: text/html");
-				    /* respwebln(PSTR("Content-Type: text/html")); */
-
-				    /* end of header */
-				    g_client.println();
-
-				    send_file_to_client(&g_file_html);
-
-				    break;
-				}
-				else if (strstr(filename, ".css") != 0)
-				{
-				    /* respwebln(PSTR("Content-Type: text/css")); */
-				}
-				else if (strstr(filename, ".jpg") != 0)
-				{
-				    /* respwebln(PSTR("Content-Type: image/jpeg")); */
-				    /* respwebln(PSTR("Cache-Control: max-age=2592000")); */
-				}
-				else if (strstr(filename, ".ico") != 0)
-				{
-				    /* respwebln(PSTR("Content-Type: image/x-icon")); */
-				    /* respwebln(PSTR("Cache-Control: max-age=2592000")); */
-				}
-				else
-				    /* g_client.println("Content-Type: text"); */
-
-				/* end of header */
-				g_client.println();
-
-				send_resp_to_client(&g_file_html);
-
-				break;
-			    }
-			    else
-			    {
-				g_client.println("HTTP/1.1 404 Not Found");
-				/* respwebln(g_txtError404); */
-				/* g_client.println("Content-Type: text/html"); */
-				g_client.println();
-				/* g_client.println("<h2>Domotix Error: File Not Found!</h2>"); */
-
-				break;
-			    }
+			    /* end of header */
+			    g_client.println();
+			    send_file_to_client(&g_filename.fd);
+			    g_filename.fd.close();
 			}
 			else
 			{
-			    g_client.println("HTTP/1.1 404 Not Found");
-			    /* respwebln(g_txtError404); */
-			    /* g_client.println("Content-Type: text/html"); */
-			    g_client.println();
-			    /* g_client.println("<h2>Domotix Error: GET /  Not Found!</h2>"); */
+			    if (strstr(g_filename.name, ".css") != NULL)
+			    {
+				PgmClientPrintln("Content-Type: text/css");
+			    }
+			    else if (strstr(g_filename.name, ".jpg") != NULL)
+			    {
+				PgmClientPrintln("Content-Type: image/jpeg");
+				PgmClientPrintln("Cache-Control: max-age=2592000");
+			    }
+			    else if (strstr(g_filename.name, ".ico") != NULL)
+			    {
+				PgmClientPrintln("Content-Type: image/x-icon");
+				PgmClientPrintln("Cache-Control: max-age=2592000");
+			    }
+			    else
+				PgmClientPrintln("Content-Type: text");
 
-			    break;
+			    /* end of header */
+			    g_client.println();
+
+			    send_resp_to_client(&g_filename.fd);
+			    g_filename.fd.close();
 			}
 		    }
+		    else
+		    {
+			PgmClientPrintln("HTTP/1.1 404 Not Found");
+			PgmClientPrintln("Content-Type: text/html");
+			g_client.println();
+			PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
+		    }
+		}
+		else
+		{
+		    PgmClientPrintln("HTTP/1.1 404 Not Found");
+		    PgmClientPrintln("Content-Type: text/html");
+		    g_client.println();
+		    PgmClientPrintln("<h2>Domotix Error: GET /  Not Found!</h2>");
 		}
 	    }
-	    /* close connection */
-	    delay(1);
-	    g_client.stop();
+	    else
+	    {
+		PgmClientPrintln("HTTP/1.1 404 Not Found");
+		PgmClientPrintln("Content-Type: text/html");
+		g_client.println();
+		PgmClientPrintln("<h2>Domotix Error: GET /  Error, line too long!</h2>");
+	    }
+	/* close connection */
+	delay(5);
+	g_client.stop();
+#ifdef DEBUG
+	PgmPrintln("Connection Closed");
+#endif
 	}
     }
 }
@@ -709,7 +814,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
+#endif
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
@@ -720,7 +827,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
+#endif
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
@@ -731,7 +840,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage porte ext :");Serial.println(g_cellier_porte_ext.curr);
+#endif
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
@@ -742,7 +853,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
+#endif
 	}
 
 	g_cellier_porte_int.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
@@ -753,7 +866,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage port int :");Serial.println(g_cellier_porte_int.curr);
+#endif
 	}
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
@@ -764,7 +879,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage luniere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
+#endif
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
@@ -775,7 +892,9 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
+#endif
 	}
 
 	g_cellier_light.curr =  analogRead(PIN_CELLIER_LUMIERE);
@@ -786,7 +905,10 @@ void process_domotix(void)
 	     * Format :
 	     *
 	     */
+#ifdef DEBUG
 	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_light.curr);
+#endif
+
 	}
 	delay(100);
     }
@@ -816,7 +938,9 @@ void process_time(void)
 void loop(void)
 {
     process_ethernet();
+#ifdef DEBUG
     process_serial();
+#endif
     process_time();
     process_domotix();
 }
