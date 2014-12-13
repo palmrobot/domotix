@@ -68,10 +68,12 @@ typedef struct code_t
 #define WEB_CODE_1		'1'
 #define WEB_CODE_2		'2'
 #define WEB_CODE_3		'3'
+#define WEB_CODE_4		'4'
 
 code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 		    {"Allumee", "Eteinte"}, /* code 2 */
-		    {"ko", "ok"} }; /* code 3 */
+		    {"ko", "ok"}, /* code 3 */
+		    {"Ouvert", "Ferme"} }; /* code 4 */
 
 
 EthernetServer g_server(80);
@@ -107,7 +109,11 @@ state_uint8_t g_cellier_porte_ext; /* H */
 state_uint8_t g_cellier_porte_int; /* I */
 state_uint8_t g_template_porte; /*  */
 state_uint8_t g_template_fenetre; /*  */
+state_uint8_t g_template_volet; /*  */
 state_int_t g_template_lumiere; /*  */
+
+#define THRESHOLD_CMP_OLD	10
+#define THRESHOLD_LIGHT_ON	70
 
 #define WEB_GET			1
 #define WEB_EOL			2
@@ -186,6 +192,21 @@ void setup(void)
     g_template_porte.curr = 1;
     g_template_fenetre.curr = 1;
     g_template_lumiere.curr = 0;
+    g_template_volet.curr = 1;
+
+    g_garage_gauche.old = 0;
+    g_garage_droite.old = 0;
+    g_garage_fenetre.old = 0;
+    g_garage_lumiere_etabli.old = 0;
+    g_garage_lumiere.old = 0;
+    g_cellier_light.old = 0;
+    g_cellier_porte_ext.old = 0;
+    g_cellier_porte_int.old = 0;
+    g_template_porte.old = 0;
+    g_template_fenetre.old = 0;
+    g_template_volet.old = 0;
+    g_template_lumiere.old = 0;
+
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -253,6 +274,10 @@ void deal_with_code(uint8_t type, uint8_t code)
 	{
 	    ptr_code = &g_code[2];
 	}break;
+	case WEB_CODE_4:
+	{
+	    ptr_code = &g_code[3];
+	}break;
 	default:
 	{
 	    ptr_code = &g_code[0];
@@ -282,8 +307,8 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'D':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_garage_fenetre.curr],
-		strlen(ptr_code->name[g_garage_fenetre.curr]));
+	    g_client.write((uint8_t*)ptr_code->name[g_template_volet.curr],
+		strlen(ptr_code->name[g_template_volet.curr]));
 	}break;
 	case 'E':
 	{
@@ -292,26 +317,28 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'F':
 	{
-	    if (code == WEB_CODE_3)
+	    if (g_garage_lumiere.curr > THRESHOLD_LIGHT_ON)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[g_garage_lumiere.curr],
-		    strlen(ptr_code->name[g_garage_lumiere.curr]));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
 	    else
 	    {
-		g_client.print(g_garage_lumiere.curr);
+		g_client.write((uint8_t*)ptr_code->name[1],
+		    strlen(ptr_code->name[1]));
 	    }
 	}break;
 	case 'G':
 	{
-	    if (code == WEB_CODE_3)
+	    if (g_garage_lumiere_etabli.curr > THRESHOLD_LIGHT_ON)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[g_garage_lumiere_etabli.curr],
-		    strlen(ptr_code->name[g_garage_lumiere_etabli.curr]));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
 	    else
 	    {
-		g_client.print(g_garage_lumiere_etabli.curr);
+		g_client.write((uint8_t*)ptr_code->name[1],
+		    strlen(ptr_code->name[1]));
 	    }
 	}break;
 	case 'H':
@@ -326,14 +353,15 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'J':
 	{
-	    if (code == WEB_CODE_3)
+	    if (g_cellier_light.curr > THRESHOLD_LIGHT_ON)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[g_cellier_light.curr],
-		    strlen(ptr_code->name[g_cellier_light.curr]));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
 	    else
 	    {
-		g_client.print(g_cellier_light.curr);
+		g_client.write((uint8_t*)ptr_code->name[1],
+		    strlen(ptr_code->name[1]));
 	    }
 	}break;
 	case 'K':
@@ -356,14 +384,15 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'O':
 	{
-	    if (code == WEB_CODE_3)
+	    if (g_template_lumiere.curr > THRESHOLD_LIGHT_ON)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[g_template_lumiere.curr],
-		    strlen(ptr_code->name[g_template_lumiere.curr]));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
 	    else
 	    {
-		g_client.print(g_template_lumiere.curr);
+		g_client.write((uint8_t*)ptr_code->name[1],
+		    strlen(ptr_code->name[1]));
 	    }
 	}break;
 	case 'P':
@@ -398,14 +427,15 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'V':
 	{
-	    if (code == WEB_CODE_3)
+	    if (g_template_lumiere.curr > THRESHOLD_LIGHT_ON)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[g_template_lumiere.curr],
-		    strlen(ptr_code->name[g_template_lumiere.curr]));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
 	    else
 	    {
-		g_client.print(g_template_lumiere.curr);
+		g_client.write((uint8_t*)ptr_code->name[1],
+		    strlen(ptr_code->name[1]));
 	    }
 	}break;
 	case 'W':
@@ -872,7 +902,8 @@ void process_domotix(void)
 	}
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
-	if (g_garage_lumiere_etabli.curr != g_garage_lumiere_etabli.old)
+	if ((g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_garage_lumiere_etabli.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere_etabli.old))
 	{
 	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
 	    /* write in file
@@ -885,7 +916,8 @@ void process_domotix(void)
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
-	if (g_garage_lumiere.curr != g_garage_lumiere.old)
+	if ((g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old))
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
 	    /* write in file
@@ -898,7 +930,8 @@ void process_domotix(void)
 	}
 
 	g_cellier_light.curr =  analogRead(PIN_CELLIER_LUMIERE);
-	if (g_cellier_light.curr != g_cellier_light.old)
+	if ((g_cellier_light.curr > (g_cellier_light.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_cellier_light.curr + THRESHOLD_CMP_OLD) < g_cellier_light.old))
 	{
 	    g_cellier_light.old = g_cellier_light.curr;
 	    /* write in file
