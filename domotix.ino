@@ -10,22 +10,23 @@
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
-#define PIN_GARAGE_LUMIERE		A0
-#define PIN_GARAGE_LUMIERE_ETABLI	A1
-#define PIN_CELLIER_LUMIERE		A2
-#define PIN_A3		A3
-#define PIN_A4		A4
-#define PIN_A5		A5
+#define PIN_A0		A0
+#define PIN_GARAGE_LUMIERE_ETABLI	A1 /* D */
+#define PIN_CELLIER_LUMIERE		A2 /* G */
+#define PIN_TEMP_EXT			A3 /* M */
+#define PIN_GARAGE_LUMIERE		A4 /* I */
+#define PIN_LINGERIE_LUMIERE		A5 /* J */
 
-#define PIN_GARAGE_DROITE		9
-#define PIN_GARAGE_GAUCHE		8
-#define PIN_GARAGE_FENETRE		7
-#define PIN_CELLIER_PORTE_EXT		6
-#define PIN_CELLIER_PORTE_INT		5
-#define CS_PIN_SDCARD   4
-#define PIN_3		3
-#define PIN_2		2
-
+#define PIN_GARAGE_DROITE		9 /* A */
+#define PIN_GARAGE_GAUCHE		8 /* B */
+#define PIN_GARAGE_FENETRE		7 /* C */
+#define PIN_CELLIER_PORTE_EXT		6 /* E */
+#define PIN_CELLIER_PORTE_INT		5 /* F */
+#define CS_PIN_SDCARD			4
+#define PIN_LINGERIE_CUISINE		3 /* K */
+#define PIN_GARAGE_FOND			2 /* H */
+#define PIN_CUISINE_EXT			1 /* L */
+#define PIN_LINGERIE_FENETRE		0 /* N */
 
 
 /********************************************************/
@@ -76,7 +77,7 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 		    {"Ouvert", "Ferme"} }; /* code 4 */
 
 
-EthernetServer g_server(80);
+EthernetServer g_server(9090);
 EthernetClient g_client;
 
 typedef struct state_uint8_t
@@ -98,19 +99,22 @@ typedef struct file_web_t
     char name[FILE_MAX_LEN + 1];
 };
 
-
-state_uint8_t g_garage_gauche; /* A */
-state_uint8_t g_garage_droite; /* B */
+state_uint8_t g_garage_droite; /* A */
+state_uint8_t g_garage_gauche; /* B */
 state_uint8_t g_garage_fenetre; /* C */
-state_int_t g_garage_lumiere_etabli; /* G */
-state_int_t g_garage_lumiere; /* F */
-state_int_t g_cellier_light; /* J */
-state_uint8_t g_cellier_porte_ext; /* H */
-state_uint8_t g_cellier_porte_int; /* I */
-state_uint8_t g_template_porte; /*  */
-state_uint8_t g_template_fenetre; /*  */
-state_uint8_t g_template_volet; /*  */
-state_int_t g_template_lumiere; /*  */
+state_int_t g_garage_lumiere_etabli; /* D */
+state_uint8_t g_cellier_porte_ext; /* E */
+state_uint8_t g_cellier_porte; /* F */
+state_int_t g_cellier_lumiere; /* G */
+state_uint8_t g_garage_porte; /* H */
+state_int_t g_garage_lumiere; /* I */
+state_int_t g_lingerie_lumiere; /* J */
+state_uint8_t g_lingerie_porte_cuisine; /* K */
+state_uint8_t g_cuisine_porte_ext; /* L */
+state_int_t g_temperature_ext; /* M */
+state_uint8_t g_lingerie_fenetre; /* N */
+
+state_uint8_t g_default; /*  */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	70
@@ -124,6 +128,7 @@ uint8_t g_page_web   = 0;
 uint16_t g_req_count = 0;
 time_t g_prevDisplay = 0;
 file_web_t g_filename;
+uint8_t g_debug = 0;
 
 /********************************************************/
 /*      NTP			                        */
@@ -155,6 +160,17 @@ byte g_packetBuffer[NTP_PACKET_SIZE];
 /********************************************************/
 void setup(void)
 {
+    /* Init Port In/Out */
+    pinMode(PIN_GARAGE_DROITE, INPUT);
+    pinMode(PIN_GARAGE_GAUCHE, INPUT);
+    pinMode(PIN_GARAGE_FENETRE, INPUT);
+    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
+    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
+    pinMode(PIN_LINGERIE_CUISINE, INPUT);
+    pinMode(PIN_GARAGE_FOND, INPUT);
+    pinMode(PIN_CUISINE_EXT, INPUT);
+    pinMode(PIN_LINGERIE_FENETRE, INPUT);
+
     /* init Process */
     g_process_serial   = PROCESS_SERIAL_ON;
     g_process_ethernet = PROCESS_ETHERNET_ON;
@@ -181,32 +197,28 @@ void setup(void)
     setSyncProvider(getNtpTime);
     delay(100);
 
-    /* Init Port In/Out */
-    pinMode(PIN_GARAGE_DROITE, INPUT);
-    pinMode(PIN_GARAGE_GAUCHE, INPUT);
-    pinMode(PIN_GARAGE_FENETRE, INPUT);
-    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
-    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
-
     /* Init global var */
-    g_template_porte.curr = 1;
-    g_template_fenetre.curr = 1;
-    g_template_lumiere.curr = 0;
-    g_template_volet.curr = 1;
+    g_debug = 0;
 
-    g_garage_gauche.old = 0;
+    /* Init global var for web code */
+    g_default.curr = 1;
+    g_default.old  = 1;
+
     g_garage_droite.old = 0;
+    g_garage_gauche.old = 0;
     g_garage_fenetre.old = 0;
     g_garage_lumiere_etabli.old = 0;
-    g_garage_lumiere.old = 0;
-    g_cellier_light.old = 0;
     g_cellier_porte_ext.old = 0;
-    g_cellier_porte_int.old = 0;
-    g_template_porte.old = 0;
-    g_template_fenetre.old = 0;
-    g_template_volet.old = 0;
-    g_template_lumiere.old = 0;
-
+    g_cellier_porte.old = 0;
+    g_cellier_lumiere.old = 0;
+    g_garage_porte.old = 0;
+    g_garage_lumiere.old = 0;
+    g_lingerie_lumiere.old = 0;
+    g_lingerie_lumiere.old = 0;
+    g_lingerie_porte_cuisine.old = 0;
+    g_cuisine_porte_ext.old = 0;
+    g_temperature_ext.old = 0;
+    g_lingerie_fenetre.old = 0;
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -286,19 +298,25 @@ void deal_with_code(uint8_t type, uint8_t code)
 
     switch (type)
     {
-	case 'a':
+	case 'y':
+	{
+	    g_debug = 1;
+	}break;
+	case 'z':
 	{
 	    digitalClockDisplay();
+	    /* debug code ( $y0 ) must be set after time in .html page */
+	    g_debug = 0;
 	}break;
 	case 'A':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_garage_gauche.curr],
-		strlen(ptr_code->name[g_garage_gauche.curr]));
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_droite.curr],
+		strlen(ptr_code->name[g_garage_droite.curr]));
 	}break;
 	case 'B':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_garage_droite.curr],
-		strlen(ptr_code->name[g_garage_droite.curr]));
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_gauche.curr],
+		strlen(ptr_code->name[g_garage_gauche.curr]));
 	}break;
 	case 'C':
 	{
@@ -307,141 +325,191 @@ void deal_with_code(uint8_t type, uint8_t code)
 	}break;
 	case 'D':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_volet.curr],
-		strlen(ptr_code->name[g_template_volet.curr]));
+	    if (g_debug)
+	    {
+		g_client.print(g_garage_lumiere_etabli.curr);
+	    }
+	    else
+	    {
+		if (g_garage_lumiere_etabli.curr > THRESHOLD_LIGHT_ON)
+		{
+		    g_client.write((uint8_t*)ptr_code->name[0],
+			strlen(ptr_code->name[0]));
+		}
+		else
+		{
+		    g_client.write((uint8_t*)ptr_code->name[1],
+			strlen(ptr_code->name[1]));
+		}
+	    }
 	}break;
 	case 'E':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
-	}break;
-	case 'F':
-	{
-	    if (g_garage_lumiere.curr > THRESHOLD_LIGHT_ON)
-	    {
-		g_client.write((uint8_t*)ptr_code->name[0],
-		    strlen(ptr_code->name[0]));
-	    }
-	    else
-	    {
-		g_client.write((uint8_t*)ptr_code->name[1],
-		    strlen(ptr_code->name[1]));
-	    }
-	}break;
-	case 'G':
-	{
-	    if (g_garage_lumiere_etabli.curr > THRESHOLD_LIGHT_ON)
-	    {
-		g_client.write((uint8_t*)ptr_code->name[0],
-		    strlen(ptr_code->name[0]));
-	    }
-	    else
-	    {
-		g_client.write((uint8_t*)ptr_code->name[1],
-		    strlen(ptr_code->name[1]));
-	    }
-	}break;
-	case 'H':
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_cellier_porte_ext.curr],
 		strlen(ptr_code->name[g_cellier_porte_ext.curr]));
 	}break;
-	case 'I':
+	case 'F':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_cellier_porte_int.curr],
-		strlen(ptr_code->name[g_cellier_porte_int.curr]));
+	    g_client.write((uint8_t*)ptr_code->name[g_cellier_porte.curr],
+		strlen(ptr_code->name[g_cellier_porte.curr]));
 	}break;
-	case 'J':
+	case 'G':
 	{
-	    if (g_cellier_light.curr > THRESHOLD_LIGHT_ON)
+	    if (g_debug)
 	    {
-		g_client.write((uint8_t*)ptr_code->name[0],
-		    strlen(ptr_code->name[0]));
+		g_client.print(g_cellier_lumiere.curr);
 	    }
 	    else
 	    {
-		g_client.write((uint8_t*)ptr_code->name[1],
-		    strlen(ptr_code->name[1]));
+		if (g_cellier_lumiere.curr > THRESHOLD_LIGHT_ON)
+		{
+		    g_client.write((uint8_t*)ptr_code->name[0],
+			strlen(ptr_code->name[0]));
+		}
+		else
+		{
+		    g_client.write((uint8_t*)ptr_code->name[1],
+			strlen(ptr_code->name[1]));
+		}
+	    }
+	}break;
+	case 'H':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_garage_porte.curr],
+		strlen(ptr_code->name[g_garage_porte.curr]));
+	}break;
+	case 'I':
+	{
+	    if (g_debug)
+	    {
+		g_client.print(g_garage_lumiere.curr);
+	    }
+	    else
+	    {
+		if (g_garage_lumiere.curr > THRESHOLD_LIGHT_ON)
+		{
+		    g_client.write((uint8_t*)ptr_code->name[0],
+			strlen(ptr_code->name[0]));
+		}
+		else
+		{
+		    g_client.write((uint8_t*)ptr_code->name[1],
+			strlen(ptr_code->name[1]));
+		}
+	    }
+	}break;
+	case 'J':
+	{
+	    if (g_debug)
+	    {
+		g_client.print(g_lingerie_lumiere.curr);
+	    }
+	    else
+	    {
+		if (g_lingerie_lumiere.curr > THRESHOLD_LIGHT_ON)
+		{
+		    g_client.write((uint8_t*)ptr_code->name[0],
+			strlen(ptr_code->name[0]));
+		}
+		else
+		{
+		    g_client.write((uint8_t*)ptr_code->name[1],
+			strlen(ptr_code->name[1]));
+		}
 	    }
 	}break;
 	case 'K':
 	{
-
+	    g_client.write((uint8_t*)ptr_code->name[g_lingerie_porte_cuisine.curr],
+		strlen(ptr_code->name[g_lingerie_porte_cuisine.curr]));
 	}break;
-	case 'L':
-	{
-
-	}break;
+	/* case 'L': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_cuisine_porte_ext.curr], */
+	/* 	strlen(ptr_code->name[g_cuisine_porte_ext.curr])); */
+	/* }break; */
 	case 'M':
 	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
+	    g_client.print(g_temperature_ext.curr);
 	}break;
-	case 'N':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
-		strlen(ptr_code->name[g_template_fenetre.curr]));
-	}break;
-	case 'O':
-	{
-	    if (g_template_lumiere.curr > THRESHOLD_LIGHT_ON)
-	    {
-		g_client.write((uint8_t*)ptr_code->name[0],
-		    strlen(ptr_code->name[0]));
-	    }
-	    else
-	    {
-		g_client.write((uint8_t*)ptr_code->name[1],
-		    strlen(ptr_code->name[1]));
-	    }
-	}break;
-	case 'P':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
-	}break;
-	case 'Q':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
-	}break;
-	case 'R':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
-	}break;
-	case 'S':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_porte.curr],
-		strlen(ptr_code->name[g_template_porte.curr]));
-	}break;
-	case 'T':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
-		strlen(ptr_code->name[g_template_fenetre.curr]));
-	}break;
-	case 'U':
-	{
-	    g_client.write((uint8_t*)ptr_code->name[g_template_fenetre.curr],
-		strlen(ptr_code->name[g_template_fenetre.curr]));
-	}break;
-	case 'V':
-	{
-	    if (g_template_lumiere.curr > THRESHOLD_LIGHT_ON)
-	    {
-		g_client.write((uint8_t*)ptr_code->name[0],
-		    strlen(ptr_code->name[0]));
-	    }
-	    else
-	    {
-		g_client.write((uint8_t*)ptr_code->name[1],
-		    strlen(ptr_code->name[1]));
-	    }
-	}break;
-	case 'W':
-	{
+	/* case 'N': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_lingerie_fenetre.curr], */
+	/* 	strlen(ptr_code->name[g_lingerie_fenetre.curr])); */
+	/* }break; */
+	/* case 'O': */
+	/* { */
+	/* }break; */
+	/* case 'P': */
+	/* { */
+	/* }break; */
+	/* case 'Q': */
+	/* { */
+	/* }break; */
+	/* case 'R': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'S': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'T': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'U': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'V': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[1], */
+	/* 	strlen(ptr_code->name[1])); */
 
-	}
+	/* }break; */
+	/* case 'W': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'X': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'Y': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'Z': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'a': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'b': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	/* case 'c': */
+	/* { */
+	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
+	/* 	strlen(ptr_code->name[g_default.curr])); */
+	/* }break; */
+	default:
+	
+	break;
     }
 }
 
@@ -862,19 +930,6 @@ void process_domotix(void)
 #endif
 	}
 
-	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
-	if (g_cellier_porte_ext.curr != g_cellier_porte_ext.old)
-	{
-	    g_cellier_porte_ext.old = g_cellier_porte_ext.curr;
-	    /* write in file
-	     * Format :
-	     *
-	     */
-#ifdef DEBUG
-	    PgmPrint("Garage porte ext :");Serial.println(g_cellier_porte_ext.curr);
-#endif
-	}
-
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
 	if (g_garage_fenetre.curr != g_garage_fenetre.old)
 	{
@@ -888,18 +943,94 @@ void process_domotix(void)
 #endif
 	}
 
-	g_cellier_porte_int.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
-	if (g_cellier_porte_int.curr != g_cellier_porte_int.old)
+	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
+	if (g_cellier_porte_ext.curr != g_cellier_porte_ext.old)
 	{
-	    g_cellier_porte_int.old = g_cellier_porte_int.curr;
+	    g_cellier_porte_ext.old = g_cellier_porte_ext.curr;
 	    /* write in file
 	     * Format :
 	     *
 	     */
 #ifdef DEBUG
-	    PgmPrint("Garage port int :");Serial.println(g_cellier_porte_int.curr);
+	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
 #endif
 	}
+
+	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
+	if (g_cellier_porte.curr != g_cellier_porte.old)
+	{
+	    g_cellier_porte.old = g_cellier_porte.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Cellier porte lingerie :");Serial.println(g_cellier_porte.curr);
+#endif
+	}
+
+	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
+	if (g_lingerie_porte_cuisine.curr != g_lingerie_porte_cuisine.old)
+	{
+	    g_lingerie_porte_cuisine.old = g_lingerie_porte_cuisine.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Lingerie porte cuisine :");Serial.println(g_lingerie_porte_cuisine.curr);
+#endif
+	}
+
+	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
+	if (g_garage_porte.curr != g_garage_porte.old)
+	{
+	    g_garage_porte.old = g_garage_porte.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Garage fond :");Serial.println(g_garage_porte.curr);
+#endif
+	}
+
+	g_cuisine_porte_ext.curr = 1; /* digitalRead(PIN_CUISINE_EXT); */
+	if (g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old)
+	{
+	    g_cuisine_porte_ext.old = g_cuisine_porte_ext.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
+#endif
+	}
+
+	g_lingerie_fenetre.curr =  1; /* digitalRead(PIN_LINGERIE_FENETRE); */
+	if (g_lingerie_fenetre.curr != g_lingerie_fenetre.old)
+	{
+	    g_lingerie_fenetre.old = g_lingerie_fenetre.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
+#endif
+	}
+
+
+	/* ================================
+	 *
+	 *
+	 * Analog
+	 *
+	 *
+	 *
+	 * =================================
+	 */
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
 	if ((g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
@@ -911,7 +1042,38 @@ void process_domotix(void)
 	     *
 	     */
 #ifdef DEBUG
-	    PgmPrint("Garage luniere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
+	    PgmPrint("Garage lumiere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
+#endif
+	}
+
+	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
+	if ((g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old))
+	{
+	    g_cellier_lumiere.old = g_cellier_lumiere.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_lumiere.curr);
+#endif
+
+	}
+
+	int value = analogRead(PIN_TEMP_EXT);
+	g_temperature_ext.curr = (500.0 * value) / 1024;
+
+	if ((g_temperature_ext.curr > (g_temperature_ext.old + 1)) ||
+	    ((g_temperature_ext.curr + 1) < g_temperature_ext.old))
+	{
+	    g_temperature_ext.old = g_temperature_ext.curr;
+	    /* write in file
+	     * Format :
+	     *
+	     */
+#ifdef DEBUG
+	    PgmPrint("Temperature Ext:");Serial.println(g_temperature_ext.curr);
 #endif
 	}
 
@@ -929,21 +1091,21 @@ void process_domotix(void)
 #endif
 	}
 
-	g_cellier_light.curr =  analogRead(PIN_CELLIER_LUMIERE);
-	if ((g_cellier_light.curr > (g_cellier_light.old + THRESHOLD_CMP_OLD)) ||
-	    ((g_cellier_light.curr + THRESHOLD_CMP_OLD) < g_cellier_light.old))
+	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
+	if ((g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_lingerie_lumiere.curr + THRESHOLD_CMP_OLD) < g_lingerie_lumiere.old))
 	{
-	    g_cellier_light.old = g_cellier_light.curr;
+	    g_lingerie_lumiere.old = g_lingerie_lumiere.curr;
 	    /* write in file
 	     * Format :
 	     *
 	     */
 #ifdef DEBUG
-	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_light.curr);
+	    PgmPrint("Garage lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
-
 	}
-	delay(100);
+
+	delay(10);
     }
 }
 
