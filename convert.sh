@@ -1,8 +1,10 @@
 #!/bin/bash
 
-cp -v $1 $2
-sed -i -e 's/^\s*//' $2
-sed -i -e '/^$/d' $2
-sed -i -e 's/>\s*</></g' $2
-
+LIST=`ls *.html | awk -F "." {'print $1'}`
+for i in $LIST; do
+cp -v ${i}.html ${i}.htm
+sed -i -e 's/^\s*//' ${i}.htm
+sed -i -e '/^$/d' ${i}.htm
+sed -i -e 's/>\s*</></g' ${i}.htm
+done
 
