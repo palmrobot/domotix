@@ -25,8 +25,8 @@
 #define CS_PIN_SDCARD			4
 #define PIN_LINGERIE_CUISINE		3 /* K */
 #define PIN_GARAGE_FOND			2 /* H */
-#define PIN_CUISINE_EXT			11 /* L */
-#define PIN_LINGERIE_FENETRE		12 /* N */
+#define PIN_CUISINE_EXT			1 /* L */
+#define PIN_LINGERIE_FENETRE		0 /* N */
 
 #define PIN_SS_ETH_CONTROLLER		53
 
@@ -64,8 +64,16 @@ uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
 #define LINE_MAX_LEN			64
 char g_line[LINE_MAX_LEN + 1];
 
-#define BUFF_MAX_SIZE			100
+#define BUFF_HTML_MAX_SIZE		100
+uint8_t g_buff_html[BUFF_HTML_MAX_SIZE];
+
+#define BUFF_MAX_SIZE			200
 uint8_t g_buff[BUFF_MAX_SIZE];
+
+char g_full_list_name[13];
+
+#define SIZE_CODE_HTML			10
+char g_code_html[SIZE_CODE_HTML];
 
 typedef struct code_t
 {
@@ -87,20 +95,29 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 		    {"Ouvert", "Ferme"} }; /* code 4 */
 
 /*
- * 12/12/2014
+ * 12/12/14
  * 09:35:42
  * F
  * ok
  */
-typedef struct data_item_t
+typedef struct data_item_s
 {
     char date[9];
     char hour[9];
     char state[2];
-    char code[3];
+    char clas[3];
 };
 
-data_item_t g_data_item[7];
+#define NB_ITEM				7
+data_item_s g_data_item[NB_ITEM];
+
+#define SEPARATE_ITEM			'#'
+
+#define STATE_SEPARATION		1
+#define STATE_DATE			2
+#define STATE_HOUR			3
+#define STATE_STATE			4
+#define STATE_CLASS			5
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
@@ -191,6 +208,8 @@ byte g_packetBuffer[NTP_PACKET_SIZE];
 /********************************************************/
 void setup(void)
 {
+    uint8_t i;
+
     /* Init Port In/Out */
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
@@ -256,6 +275,12 @@ void setup(void)
     g_cuisine_porte_ext.old = 0;
     g_temperature_ext.old = 0;
     g_lingerie_fenetre.old = 0;
+
+    for(i = 0; i < NB_ITEM; i++ )
+    {
+	g_data_item[i].date[0] = '\0';
+    }
+
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -327,10 +352,10 @@ void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
 	case 'A':
 	{
 	    /* open file */
+	    read_item_in_file("A.txt");
 
-	    /* read value */
-
-	    /* close file */
+	    /* check type */
+	    
 
 	}break;
 	case 'B':
@@ -574,20 +599,20 @@ void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
 	    g_client.write((uint8_t*)ptr_code->name[g_lingerie_porte_cuisine.curr],
 		strlen(ptr_code->name[g_lingerie_porte_cuisine.curr]));
 	}break;
-	/* case 'L': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_cuisine_porte_ext.curr], */
-	/* 	strlen(ptr_code->name[g_cuisine_porte_ext.curr])); */
-	/* }break; */
+	case 'L':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_cuisine_porte_ext.curr],
+		strlen(ptr_code->name[g_cuisine_porte_ext.curr]));
+	}break;
 	case 'M':
 	{
 	    g_client.print(g_temperature_ext.curr);
 	}break;
-	/* case 'N': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_lingerie_fenetre.curr], */
-	/* 	strlen(ptr_code->name[g_lingerie_fenetre.curr])); */
-	/* }break; */
+	case 'N':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_lingerie_fenetre.curr],
+		strlen(ptr_code->name[g_lingerie_fenetre.curr]));
+	}break;
 	/* case 'O': */
 	/* { */
 	/* }break; */
@@ -664,6 +689,15 @@ void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
     }
 }
 
+
+void deal_with_full_list(uint8_t item, uint8_t type, uint8_t code)
+{
+    sprintf(g_full_list_name, "%c.TXT", item);
+
+    send_file_full_list(g_full_list_name);
+}
+
+
 void send_file_to_client(File *file)
 {
     uint16_t index;
@@ -674,12 +708,12 @@ void send_file_to_client(File *file)
     index = 0;
     while (file->available())
     {
-	g_buff[index] = file->read();
+	g_buff_html[index] = file->read();
 
-	 if (g_buff[index] == '$')
+	 if (g_buff_html[index] == '$')
 	 {
 		/* first of all, send the last buffer without the '$'*/
-		g_client.write(g_buff, index);
+		g_client.write(g_buff_html, index);
             	index = 0;
 
 		/* then get the item */
@@ -695,6 +729,10 @@ void send_file_to_client(File *file)
 		{
 		    deal_with_code(item, type, code);
 		}
+		else if (type == 'A')
+		{
+		    deal_with_full_list(item, type, code);
+		}
 		else
 		{
 		    deal_with_file(item, type, code);
@@ -703,15 +741,15 @@ void send_file_to_client(File *file)
 	 else
 	 {
 	     index ++;
-	     if (index >= BUFF_MAX_SIZE)
+	     if (index >= BUFF_HTML_MAX_SIZE)
 	     {
-		 g_client.write(g_buff, index);
+		 g_client.write(g_buff_html, index);
 		 index = 0;
 	     }
 	 }
     }
     if (index > 0)
-	g_client.write(g_buff, index);
+	g_client.write(g_buff_html, index);
 }
 
 
@@ -722,16 +760,59 @@ void send_resp_to_client(File *fd)
     index = 0;
     while (fd->available())
     {
-	g_buff[index] = fd->read();
+	g_buff_html[index] = fd->read();
 	index++;
-	if (index >= BUFF_MAX_SIZE)
+	if (index >= BUFF_HTML_MAX_SIZE)
 	{
-	    g_client.write(g_buff, index);
+	    g_client.write(g_buff_html, index);
 	    index = 0;
 	}
     }
     if (index > 0)
-	g_client.write(g_buff, index);
+	g_client.write(g_buff_html, index);
+}
+
+void send_file_full_list(char *file)
+{
+    File  fd;
+    uint8_t step;
+    uint8_t value;
+
+    /* write in file
+     * Format :
+     * #
+     * 12/12/2014
+     * 09:35:42
+     * F
+     * ok
+     */
+
+    fd = SD.open(file, FILE_READ);
+
+    step  = 0;
+    while (fd.available())
+    {
+	value = fd.read();
+
+	if (value == '\n')
+	{
+	    step++;
+	    if (step < 5 )
+	    {
+		step = 0;
+		sprintf(g_code_html," -- ");
+	    }
+	    else
+	    {
+		sprintf(g_code_html,"<\\br>");
+	    }
+	    g_client.write((const uint8_t *)g_code_html, strlen(g_code_html));
+	}
+	else
+	    g_client.write(value);
+    }
+
+    fd.close();
 }
 
 /********************************************************/
@@ -1040,48 +1121,151 @@ void process_ethernet(void)
     }
 }
 
-void read_date(const char *file, uint8_t index, char *date)
+void read_item_in_file(const char *file)
 {
-    uint32_t filesize;
-    File  fd;
-    uint8_t size_to_read;
-    uint8_t i;
+    uint32_t	file_size;
+    uint32_t	index;
+    File	fd;
+    uint8_t	nb_item;
+    uint8_t	item;
+    uint8_t	state;
+    uint8_t	j;
+    char	value;
 
-    /* read last part of file
-     * and save it to bufer
+    /* read file
+     * Format :
+     * #
+     * 12/12/2014
+     * 09:35:42
+     * F
+     * ok
      */
+
     fd = SD.open(file, FILE_READ);
+    file_size = fd.size();
 
-    /* get size of file */
-    filesize = fd.size();
-
-    /* set pointer to size - buffsize */
-    if (filesize > BUFFER_FILE)
-    {
-	fd.seek(filesize - BUFFER_FILE);
-	size_to_read = BUFFER_FILE;
-    }
+    if (file_size > BUFF_MAX_SIZE)
+	fd.seek(file_size - BUFF_MAX_SIZE);
     else
-	size_to_read = filesize;
+	fd.seek(0);
 
-    /* read file until the end */
-    i = 0;
-    while (size_to_read > 0 && file->available())
+    /* read the last part of the file */
+    index = 0;
+    while (fd.available())
     {
-	g_buff[i] = fd.read();
-	i++;
-	size_to_read--;
-    }
-
-    /* search for last entry */
-    for(i = 6; i >= 0; i--)
-    {
-	
-	g_data_item[i] = 
+	g_buff[index] = fd.read();
+	index++;
     }
 
     fd.close();
 
+    /* search for the last 7 items */
+    index--;
+    nb_item = 0;
+    while((index > 0) && (nb_item < 7))
+    {
+	if (g_buff[index] == SEPARATE_ITEM)
+	{
+	    nb_item++;
+	}
+	index--;
+    }
+
+    /* increase until separate item is found */
+    while (g_buff[index] != SEPARATE_ITEM)
+	index++;
+
+    /* Save items to struct */
+    state = STATE_SEPARATION;
+    j     = 0;
+    item  = 0;
+
+    /* read file until the end */
+    while (nb_item > 0)
+    {
+	index++;
+	switch (state)
+	{
+	    case STATE_SEPARATION:
+		if (g_buff[index] == '\n')
+		{
+		    /* switch to next state */
+		    state = STATE_DATE;
+		    j     = 0;
+		}
+	    break;
+	    case STATE_DATE:
+	    {
+		if (g_buff[index] == '\n')
+		{
+		    /* set end of string for last item */
+		    g_data_item[item].date[j] = 0;
+
+		    /* switch to next state */
+		    state = STATE_HOUR;
+		    j     = 0;
+		}
+		else
+		{
+		    g_data_item[item].date[j] = g_buff[index];
+		    j++;
+		}
+	    }break;
+	    case STATE_HOUR:
+	    {
+		if (g_buff[index] == '\n')
+		{
+		    /* set end of string for last item */
+		    g_data_item[item].hour[j] = 0;
+
+		    /* switch to next state */
+		    state = STATE_STATE;
+		    j     = 0;
+		}
+		else
+		{
+		    g_data_item[item].hour[j] = g_buff[index];
+		    j++;
+		}
+	    }break;
+	    case STATE_STATE:
+	    {
+		if (g_buff[index] == '\n')
+		{
+		    /* set end of string for last item */
+		    g_data_item[item].state[j] = 0;
+
+		    /* switch to next state */
+		    state = STATE_CLASS;
+		    j     = 0;
+		}
+		else
+		{
+		    g_data_item[item].state[j] = g_buff[index];
+		    j++;
+		}
+	    }break;
+	    case STATE_CLASS:
+	    {
+		if (g_buff[index] == '\n')
+		{
+		    /* set end of string for last item */
+		    g_data_item[item].clas[j] = 0;
+
+		    /* switch to next state */
+		    state = STATE_SEPARATION;
+		    j     = 0;
+		    item++;
+		    nb_item--;
+		}
+		else
+		{
+		    g_data_item[item].clas[j] = g_buff[index];
+		    j++;
+		}
+	    }break;
+	}
+    }
 }
 
 void save_entry(const char *file, uint8_t value, uint8_t type)
@@ -1092,6 +1276,7 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
 
     /* write in file
      * Format :
+     * #
      * 12/12/2014
      * 09:35:42
      * F
@@ -1103,6 +1288,7 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
 	return;
 
     fd = SD.open(file, FILE_WRITE);
+    fd.println(SEPARATE_ITEM);
     fd.println(g_date);
     fd.println(g_clock);
     state = (code_t*)&g_code[type];
@@ -1130,6 +1316,7 @@ void save_entry_temp(const char *file, int value)
 	return;
 
     fd = SD.open(file, FILE_WRITE);
+    fd.println(SEPARATE_ITEM);
     fd.println(g_date);
     fd.println(g_clock);
     sprintf(data,"%d C", value);
@@ -1236,7 +1423,7 @@ void process_domotix(void)
 #endif
 	}
 
-	g_cuisine_porte_ext.curr = 1; /* digitalRead(PIN_CUISINE_EXT); */
+	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
 	if (g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old)
 	{
 	    g_cuisine_porte_ext.old = g_cuisine_porte_ext.curr;
@@ -1249,7 +1436,7 @@ void process_domotix(void)
 #endif
 	}
 
-	g_lingerie_fenetre.curr =  1; /* digitalRead(PIN_LINGERIE_FENETRE); */
+	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
 	if (g_lingerie_fenetre.curr != g_lingerie_fenetre.old)
 	{
 	    g_lingerie_fenetre.old = g_lingerie_fenetre.curr;
