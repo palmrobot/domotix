@@ -7,6 +7,8 @@
 
 /* #define DEBUG */
 
+#define VERSION				2.3
+
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
@@ -64,10 +66,10 @@ uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
 #define LINE_MAX_LEN			64
 char g_line[LINE_MAX_LEN + 1];
 
-#define BUFF_HTML_MAX_SIZE		100
+#define BUFF_HTML_MAX_SIZE		50
 uint8_t g_buff_html[BUFF_HTML_MAX_SIZE];
 
-#define BUFF_MAX_SIZE			200
+#define BUFF_MAX_SIZE			50
 uint8_t g_buff[BUFF_MAX_SIZE];
 
 char g_full_list_name[13];
@@ -333,22 +335,6 @@ void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
 {
     switch (item)
     {
-	case 'y':
-	{
-	    g_debug = 1;
-	}break;
-	case 'z':
-	{
-	    /* save current date and clock in global var */
-	    digitalClock();
-	    digitalDate();
-	    g_client.print(g_clock);
-	    g_client.print("  ");
-	    g_client.print(g_date);
-
-	    /* debug code ( $y0 ) must be set after time in .html page */
-	    g_debug = 0;
-	}break;
 	case 'A':
 	{
 	    /* open file */
@@ -398,72 +384,18 @@ void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
 	{
 
 	}break;
-	/* case 'L': */
-	/* { */
-	/* }break; */
+	case 'L':
+	{
+	}break;
 	case 'M':
 	{
 
 	}break;
-	/* case 'N': */
-	/* { */
+	case 'N':
+	{
 
-	/* }break; */
-	/* case 'O': */
-	/* { */
-	/* }break; */
-	/* case 'P': */
-	/* { */
-	/* }break; */
-	/* case 'Q': */
-	/* { */
-	/* }break; */
-	/* case 'R': */
-	/* { */
+	}break;
 
-	/* }break; */
-	/* case 'S': */
-	/* { */
-
-	/* }break; */
-	/* case 'T': */
-	/* { */
-
-	/* }break; */
-	/* case 'U': */
-	/* { */
-	/* }break; */
-	/* case 'V': */
-	/* { */
-	/* }break; */
-	/* case 'W': */
-	/* { */
-
-	/* }break; */
-	/* case 'X': */
-	/* { */
-
-	/* }break; */
-	/* case 'Y': */
-	/* { */
-
-	/* }break; */
-	/* case 'Z': */
-	/* { */
-
-	/* }break; */
-	/* case 'a': */
-	/* { */
-
-	/* }break; */
-	/* case 'b': */
-	/* { */
-
-	/* }break; */
-	/* case 'c': */
-	/* { */
-
-	/* }break; */
 	default:
 
 	break;
@@ -516,6 +448,11 @@ void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
 	}break;
+	case 'x':
+	{
+	    g_client.print("v2.3");
+	}
+	break;
 	case 'A':
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_garage_droite.curr],
@@ -694,7 +631,11 @@ void deal_with_full_list(uint8_t item, uint8_t type, uint8_t code)
 {
     sprintf(g_full_list_name, "%c.TXT", item);
 
-    send_file_full_list(g_full_list_name);
+    if (item == 'M')
+	send_file_full_list(g_full_list_name, 4);
+    else
+	send_file_full_list(g_full_list_name, 5);
+
 }
 
 
@@ -772,7 +713,7 @@ void send_resp_to_client(File *fd)
 	g_client.write(g_buff_html, index);
 }
 
-void send_file_full_list(char *file)
+void send_file_full_list(char *file, uint8_t nb_item)
 {
     File  fd;
     uint8_t step;
@@ -797,16 +738,15 @@ void send_file_full_list(char *file)
 	if (value == '\n')
 	{
 	    step++;
-	    if (step < 5 )
+	    if (step < nb_item )
 	    {
-		step = 0;
-		sprintf(g_code_html," -- ");
+		g_client.print(" -- ");
 	    }
 	    else
 	    {
-		sprintf(g_code_html,"<\\br>");
+		step = 0;
+		g_client.print("</br>");
 	    }
-	    g_client.write((const uint8_t *)g_code_html, strlen(g_code_html));
 	}
 	else
 	    g_client.write(value);
@@ -839,7 +779,7 @@ void digitalClock(void)
 
 void digitalDate(void)
 {
-    sprintf(g_date,"%02d/%02d/%02d",day(), month(), 2000-year());
+    sprintf(g_date,"%02d/%02d/%02d",day(), month(), year()-2000);
 }
 
 time_t getNtpTime(void)
