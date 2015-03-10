@@ -7,7 +7,7 @@
 
 /* #define DEBUG */
 
-#define VERSION				2.3
+#define VERSION				"v2.4"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -104,10 +104,11 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
  */
 typedef struct data_item_s
 {
-    char date[9];
-    char hour[9];
-    char state[2];
-    char clas[3];
+    uint8_t item;
+    char date[8+1];
+    char hour[8+1];
+    char state[1+1];
+    char clas[2+1];
 };
 
 #define NB_ITEM				7
@@ -333,71 +334,68 @@ void ClientPrintln_P(PGM_P str)
 /********************************************************/
 void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
 {
-    switch (item)
+    data_item_s  *ptr_item;
+
+    sprintf(g_full_list_name, "%c.TXT", item);
+
+    /* open file */
+    read_item_in_file(item, "A.txt");
+
+    switch (type)
     {
-	case 'A':
+	case '1':
 	{
-	    /* open file */
-	    read_item_in_file("A.txt");
-
-	    /* check type */
-	    
-
+	    ptr_item = &g_data_item[0];
 	}break;
-	case 'B':
+	case '2':
 	{
-
+	    ptr_item = &g_data_item[1];
 	}break;
-	case 'C':
+	case '3':
 	{
-
+	    ptr_item = &g_data_item[2];
 	}break;
-	case 'D':
+	case '4':
 	{
-
+	    ptr_item = &g_data_item[3];
 	}break;
-	case 'E':
+	case '5':
 	{
-
+	    ptr_item = &g_data_item[4];
 	}break;
-	case 'F':
+	case '6':
 	{
-
+	    ptr_item = &g_data_item[5];
 	}break;
-	case 'G':
+	case '7':
 	{
-
-	}break;
-	case 'H':
-	{
-
-	}break;
-	case 'I':
-	{
-
-	}break;
-	case 'J':
-	{
-
-	}break;
-	case 'K':
-	{
-
-	}break;
-	case 'L':
-	{
-	}break;
-	case 'M':
-	{
-
-	}break;
-	case 'N':
-	{
-
+	    ptr_item = &g_data_item[6];
 	}break;
 
 	default:
 
+	break;
+    }
+
+   switch (code)
+    {
+	case '0':
+	{
+	    g_client.write((uint8_t*)ptr_item->date, strlen(ptr_item->date));
+	}break;
+	case '1':
+	{
+	    g_client.write((uint8_t*)ptr_item->hour, strlen(ptr_item->hour));
+	}break;
+	case '2':
+	{
+	    g_client.write((uint8_t*)ptr_item->state, strlen(ptr_item->state));
+	}break;
+	case '3':
+	{
+	    g_client.write((uint8_t*)ptr_item->clas, strlen(ptr_item->clas));
+	}break;
+	default:
 	break;
     }
 }
@@ -450,7 +448,7 @@ void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
 	}break;
 	case 'x':
 	{
-	    g_client.print("v2.3");
+	    g_client.print(VERSION);
 	}
 	break;
 	case 'A':
@@ -637,7 +635,6 @@ void deal_with_full_list(uint8_t item, uint8_t type, uint8_t code)
 	send_file_full_list(g_full_list_name, 5);
 
 }
-
 
 void send_file_to_client(File *file)
 {
@@ -1061,7 +1058,7 @@ void process_ethernet(void)
     }
 }
 
-void read_item_in_file(const char *file)
+void read_item_in_file(uint8_t item_value, const char *file)
 {
     uint32_t	file_size;
     uint32_t	index;
@@ -1080,6 +1077,9 @@ void read_item_in_file(const char *file)
      * F
      * ok
      */
+
+    if (g_data_item[0].item == item_value)
+	return;
 
     fd = SD.open(file, FILE_READ);
     file_size = fd.size();
