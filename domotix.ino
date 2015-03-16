@@ -5,7 +5,10 @@
 #include <Ethernet.h>
 #include <LiquidCrystal.h>
 
-/* #define DEBUG */
+#define DEBUG
+/* #define DEBUG_HTML */
+/* #define DEBUG_SENSOR */
+#define DEBUG_ITEM
 
 #define VERSION				"v2.4"
 
@@ -67,20 +70,20 @@ uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
 char g_line[LINE_MAX_LEN + 1];
 
 #define BUFF_HTML_MAX_SIZE		50
-uint8_t g_buff_html[BUFF_HTML_MAX_SIZE];
+char g_buff_html[BUFF_HTML_MAX_SIZE];
 
-#define BUFF_MAX_SIZE			50
-uint8_t g_buff[BUFF_MAX_SIZE];
+#define BUFF_MAX_SIZE			250
+char g_buff[BUFF_MAX_SIZE];
 
 char g_full_list_name[13];
 
 #define SIZE_CODE_HTML			10
 char g_code_html[SIZE_CODE_HTML];
 
-typedef struct code_t
+typedef struct
 {
     const char *name[2];
-};
+}code_t;
 
 #define WEB_CODE_PORTE		'1'
 #define WEB_CODE_LUMIERE	'2'
@@ -102,17 +105,17 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
  * F
  * ok
  */
-typedef struct data_item_s
+typedef struct
 {
-    uint8_t item;
+    char item;
     char date[8+1];
     char hour[8+1];
     char state[1+1];
     char clas[2+1];
-};
+}data_item_t;
 
 #define NB_ITEM				7
-data_item_s g_data_item[NB_ITEM];
+data_item_t g_data_item[NB_ITEM];
 
 #define SEPARATE_ITEM			'#'
 
@@ -281,7 +284,11 @@ void setup(void)
 
     for(i = 0; i < NB_ITEM; i++ )
     {
-	g_data_item[i].date[0] = '\0';
+	g_data_item[i].item = 0;
+	g_data_item[i].date[0] = 0;
+	g_data_item[i].hour[0] = 0;
+	g_data_item[i].state[0] = 0;
+	g_data_item[i].clas[0] = 0;
     }
 
 
@@ -332,14 +339,15 @@ void ClientPrintln_P(PGM_P str)
 /********************************************************/
 /*      Web                                             */
 /********************************************************/
-void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
+void deal_with_file(char item, char type, char code)
 {
-    data_item_s  *ptr_item;
+    data_item_t  *ptr_item;
 
+    g_full_list_name[0] = '\0';
     sprintf(g_full_list_name, "%c.TXT", item);
 
     /* open file */
-    read_item_in_file(item, "A.txt");
+    read_item_in_file(item, g_full_list_name);
 
     switch (type)
     {
@@ -381,26 +389,26 @@ void deal_with_file(uint8_t item, uint8_t type, uint8_t code)
     {
 	case '0':
 	{
-	    g_client.write((uint8_t*)ptr_item->date, strlen(ptr_item->date));
+	    g_client.print(ptr_item->date);
 	}break;
 	case '1':
 	{
-	    g_client.write((uint8_t*)ptr_item->hour, strlen(ptr_item->hour));
+	    g_client.print(ptr_item->hour);
 	}break;
 	case '2':
 	{
-	    g_client.write((uint8_t*)ptr_item->state, strlen(ptr_item->state));
+	    g_client.print(ptr_item->state);
 	}break;
 	case '3':
 	{
-	    g_client.write((uint8_t*)ptr_item->clas, strlen(ptr_item->clas));
+	    g_client.print(ptr_item->clas);
 	}break;
 	default:
 	break;
     }
 }
 
-void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
+void deal_with_code(char item, char type, char code)
 {
     code_t *ptr_code;
 
@@ -625,7 +633,7 @@ void deal_with_code(uint8_t item, uint8_t type, uint8_t code)
 }
 
 
-void deal_with_full_list(uint8_t item, uint8_t type, uint8_t code)
+void deal_with_full_list(char item, char type, char code)
 {
     sprintf(g_full_list_name, "%c.TXT", item);
 
@@ -639,9 +647,9 @@ void deal_with_full_list(uint8_t item, uint8_t type, uint8_t code)
 void send_file_to_client(File *file)
 {
     uint16_t index;
-    uint8_t code;
-    uint8_t type;
-    uint8_t item;
+    char code;
+    char type;
+    char item;
 
     index = 0;
     while (file->available())
@@ -651,7 +659,7 @@ void send_file_to_client(File *file)
 	 if (g_buff_html[index] == '$')
 	 {
 		/* first of all, send the last buffer without the '$'*/
-		g_client.write(g_buff_html, index);
+	     g_client.write((uint8_t*)g_buff_html, index);
             	index = 0;
 
 		/* then get the item */
@@ -681,13 +689,13 @@ void send_file_to_client(File *file)
 	     index ++;
 	     if (index >= BUFF_HTML_MAX_SIZE)
 	     {
-		 g_client.write(g_buff_html, index);
+		 g_client.write((uint8_t*)g_buff_html, index);
 		 index = 0;
 	     }
 	 }
     }
     if (index > 0)
-	g_client.write(g_buff_html, index);
+	g_client.write((uint8_t*)g_buff_html, index);
 }
 
 
@@ -702,12 +710,12 @@ void send_resp_to_client(File *fd)
 	index++;
 	if (index >= BUFF_HTML_MAX_SIZE)
 	{
-	    g_client.write(g_buff_html, index);
+	    g_client.write((uint8_t*)g_buff_html, index);
 	    index = 0;
 	}
     }
     if (index > 0)
-	g_client.write(g_buff_html, index);
+	g_client.write((uint8_t*)g_buff_html, index);
 }
 
 void send_file_full_list(char *file, uint8_t nb_item)
@@ -896,7 +904,7 @@ void process_ethernet(void)
 	g_client = g_server.available();
 	if (g_client)
 	{
-#ifdef DEBUG
+#ifdef DEBUG_HTML
 	    PgmPrintln("New Connection");
 #endif
 	    g_page_web  = 0;
@@ -908,7 +916,7 @@ void process_ethernet(void)
 		if (g_client.available())
 		{
 		    g_line[g_req_count] = g_client.read();
-#ifdef DEBUG
+#ifdef DEBUG_HTML
 		    Serial.print(g_line[g_req_count]);
 #endif
 
@@ -916,7 +924,7 @@ void process_ethernet(void)
 		    if ((g_line[g_req_count] == '\r') ||
 			(g_line[g_req_count] == '\n'))
 		    {
-#ifdef DEBUG
+#ifdef DEBUG_HTML
 		        PgmPrintln("");
 #endif
 			/* Got a complete line */
@@ -977,7 +985,7 @@ void process_ethernet(void)
 			    {
 				strcpy(g_filename.name, &g_line[5]);
 
-#ifdef DEBUG
+#ifdef DEBUG_HTML
 				PgmPrint("found file: ");Serial.println(g_filename.name);
 #endif
 				g_filename.fd = SD.open(g_filename.name, FILE_READ);
@@ -1051,22 +1059,22 @@ void process_ethernet(void)
 	/* close connection */
 	delay(5);
 	g_client.stop();
-#ifdef DEBUG
+#ifdef DEBUG_HTML
 	PgmPrintln("Connection Closed");
 #endif
 	}
     }
 }
 
-void read_item_in_file(uint8_t item_value, const char *file)
+void read_item_in_file(char item_value, char *file)
 {
     uint32_t	file_size;
-    uint32_t	index;
+    int32_t	index;
     File	fd;
-    uint8_t	nb_item;
-    uint8_t	item;
+    char	nb_item;
+    char	item;
     uint8_t	state;
-    uint8_t	j;
+    uint8_t	i,j;
     char	value;
 
     /* read file
@@ -1078,11 +1086,55 @@ void read_item_in_file(uint8_t item_value, const char *file)
      * ok
      */
 
+#ifdef DEBUG_ITEM
+    PgmPrint("File: ");Serial.println(file);
+#endif
+
     if (g_data_item[0].item == item_value)
+    {
 	return;
+    }
+    else
+    {
+	/* reset table */
+	for(i = 0; i < NB_ITEM; i++ )
+	{
+	    g_data_item[i].item = 0;
+	    g_data_item[i].date[0] = 0;
+	    g_data_item[i].hour[0] = 0;
+	    g_data_item[i].state[0] = 0;
+	    g_data_item[i].clas[0] = 0;
+	}
+	/* set new table */
+	g_data_item[0].item = item_value;
+    }
+
+
+#ifdef DEBUG_ITEM
+    PgmPrintln("Continue");
+#endif
 
     fd = SD.open(file, FILE_READ);
+    if (fd == 0)
+    {
+
+#ifdef DEBUG_ITEM
+	PgmPrintln("File not found");
+#endif
+	return;
+    }
+
     file_size = fd.size();
+
+#ifdef DEBUG_ITEM
+    PgmPrint("File size = ");Serial.print(file_size);PgmPrintln(" Bytes");
+#endif
+
+    if (file_size == 0)
+    {
+	fd.close();
+	return;
+    }
 
     if (file_size > BUFF_MAX_SIZE)
 	fd.seek(file_size - BUFF_MAX_SIZE);
@@ -1091,13 +1143,18 @@ void read_item_in_file(uint8_t item_value, const char *file)
 
     /* read the last part of the file */
     index = 0;
-    while (fd.available())
+    while ((fd.available() && (index < BUFF_MAX_SIZE))
     {
 	g_buff[index] = fd.read();
-	index++;
+	if (g_buff[index] != -1)
+	    index++;
     }
 
     fd.close();
+
+#ifdef DEBUG_ITEM
+    PgmPrintln("search for the last 7 item");
+#endif
 
     /* search for the last 7 items */
     index--;
@@ -1110,6 +1167,10 @@ void read_item_in_file(uint8_t item_value, const char *file)
 	}
 	index--;
     }
+
+#ifdef DEBUG_ITEM
+    PgmPrint("Found ");Serial.print(nb_item);PgmPrintln(" items");
+#endif
 
     /* increase until separate item is found */
     while (g_buff[index] != SEPARATE_ITEM)
@@ -1127,12 +1188,12 @@ void read_item_in_file(uint8_t item_value, const char *file)
 	switch (state)
 	{
 	    case STATE_SEPARATION:
-		if (g_buff[index] == '\n')
-		{
-		    /* switch to next state */
-		    state = STATE_DATE;
-		    j     = 0;
-		}
+	    if (g_buff[index] == '\n')
+	    {
+		/* switch to next state */
+		state = STATE_DATE;
+		j     = 0;
+	    }
 	    break;
 	    case STATE_DATE:
 	    {
@@ -1206,6 +1267,23 @@ void read_item_in_file(uint8_t item_value, const char *file)
 	    }break;
 	}
     }
+
+
+#ifdef DEBUG_ITEM
+    PgmPrint("Nb item =");Serial.println(item);
+
+
+    for(j=0;j<item ;j++ )
+    {
+
+	PgmPrint("nb item = ");Serial.print(j);Serial.print("/");Serial.println(item);
+	PgmPrint("date    = ");Serial.println(g_data_item[j].date);
+	PgmPrint("hour    = ");Serial.println(g_data_item[j].hour);
+	PgmPrint("state   = ");Serial.println(g_data_item[j].state);
+	PgmPrint("class   = ");Serial.println(g_data_item[j].clas);
+    }
+#endif
+
 }
 
 void save_entry(const char *file, uint8_t value, uint8_t type)
@@ -1280,7 +1358,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("A.txt", g_garage_droite.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
 #endif
 	}
@@ -1293,7 +1371,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("B.txt", g_garage_gauche.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
 #endif
 	}
@@ -1306,7 +1384,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("C.txt", g_garage_fenetre.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
 #endif
 	}
@@ -1319,7 +1397,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("E.txt", g_cellier_porte_ext.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
 #endif
 	}
@@ -1332,7 +1410,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("F.txt", g_cellier_porte.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte lingerie :");Serial.println(g_cellier_porte.curr);
 #endif
 	}
@@ -1358,7 +1436,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("H.txt", g_garage_porte.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fond :");Serial.println(g_garage_porte.curr);
 #endif
 	}
@@ -1371,7 +1449,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("L.txt", g_cuisine_porte_ext.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
 #endif
 	}
@@ -1384,7 +1462,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("N.txt", g_lingerie_fenetre.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
 #endif
 	}
@@ -1423,7 +1501,7 @@ void process_domotix(void)
 		save_entry("D.txt", g_garage_lumiere_etabli.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
 #endif
 	}
@@ -1451,7 +1529,7 @@ void process_domotix(void)
 		save_entry("G.txt", g_cellier_lumiere.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_lumiere.curr);
 #endif
 	}
@@ -1464,7 +1542,7 @@ void process_domotix(void)
 	{
 	    g_temperature_ext.old = g_temperature_ext.curr;
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Temperature Ext:");Serial.println(g_temperature_ext.curr);
 #endif
 	}
@@ -1492,7 +1570,7 @@ void process_domotix(void)
 		save_entry("I.txt", g_garage_lumiere.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
 #endif
 	}
@@ -1520,7 +1598,7 @@ void process_domotix(void)
 		save_entry("J.txt", g_lingerie_lumiere.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
 	}
