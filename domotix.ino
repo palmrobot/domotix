@@ -108,10 +108,10 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 typedef struct
 {
     char item;
-    char date[8+1];
-    char hour[8+1];
-    char state[1+1];
-    char clas[2+1];
+    char date[16+1];
+    char hour[16+1];
+    char state[16+1];
+    char clas[16+1];
 }data_item_t;
 
 #define NB_ITEM				7
@@ -556,76 +556,6 @@ void deal_with_code(char item, char type, char code)
 	    g_client.write((uint8_t*)ptr_code->name[g_lingerie_fenetre.curr],
 		strlen(ptr_code->name[g_lingerie_fenetre.curr]));
 	}break;
-	/* case 'O': */
-	/* { */
-	/* }break; */
-	/* case 'P': */
-	/* { */
-	/* }break; */
-	/* case 'Q': */
-	/* { */
-	/* }break; */
-	/* case 'R': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'S': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'T': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'U': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'V': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[1], */
-	/* 	strlen(ptr_code->name[1])); */
-
-	/* }break; */
-	/* case 'W': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'X': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'Y': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'Z': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'a': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'b': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
-	/* case 'c': */
-	/* { */
-	/*     g_client.write((uint8_t*)ptr_code->name[g_default.curr], */
-	/* 	strlen(ptr_code->name[g_default.curr])); */
-	/* }break; */
 	default:
 
 	break;
@@ -656,43 +586,43 @@ void send_file_to_client(File *file)
     {
 	g_buff_html[index] = file->read();
 
-	 if (g_buff_html[index] == '$')
-	 {
-		/* first of all, send the last buffer without the '$'*/
-	     g_client.write((uint8_t*)g_buff_html, index);
-            	index = 0;
+	if (g_buff_html[index] == '$')
+	{
+	    /* first of all, send the last buffer without the '$'*/
+	    g_client.write((uint8_t*)g_buff_html, index);
+	    index = 0;
 
-		/* then get the item */
-		item = file->read();
+	    /* then get the item */
+	    item = file->read();
 
-		/* then get the type */
-		type = file->read();
+	    /* then get the type */
+	    type = file->read();
 
-		/* then get the code */
-		code = file->read();
+	    /* then get the code */
+	    code = file->read();
 
-		if (type == '0')
-		{
-		    deal_with_code(item, type, code);
-		}
-		else if (type == 'A')
-		{
-		    deal_with_full_list(item, type, code);
-		}
-		else
-		{
-		    deal_with_file(item, type, code);
-		}
-	 }
-	 else
-	 {
-	     index ++;
-	     if (index >= BUFF_HTML_MAX_SIZE)
-	     {
-		 g_client.write((uint8_t*)g_buff_html, index);
-		 index = 0;
-	     }
-	 }
+	    if (type == '0')
+	    {
+		deal_with_code(item, type, code);
+	    }
+	    else if (type == 'A')
+	    {
+		deal_with_full_list(item, type, code);
+	    }
+	    else
+	    {
+		deal_with_file(item, type, code);
+	    }
+	}
+	else
+	{
+	    index ++;
+	    if (index >= BUFF_HTML_MAX_SIZE)
+	    {
+		g_client.write((uint8_t*)g_buff_html, index);
+		index = 0;
+	    }
+	}
     }
     if (index > 0)
 	g_client.write((uint8_t*)g_buff_html, index);
@@ -1143,12 +1073,13 @@ void read_item_in_file(char item_value, char *file)
 
     /* read the last part of the file */
     index = 0;
-    while ((fd.available() && (index < BUFF_MAX_SIZE))
+    while (fd.available() && (index < BUFF_MAX_SIZE))
     {
 	g_buff[index] = fd.read();
 	if (g_buff[index] != -1)
 	    index++;
     }
+    index--;
 
     fd.close();
 
@@ -1157,9 +1088,8 @@ void read_item_in_file(char item_value, char *file)
 #endif
 
     /* search for the last 7 items */
-    index--;
     nb_item = 0;
-    while((index > 0) && (nb_item < 7))
+    while((index > 0) && (nb_item <= 7))
     {
 	if (g_buff[index] == SEPARATE_ITEM)
 	{
@@ -1171,10 +1101,6 @@ void read_item_in_file(char item_value, char *file)
 #ifdef DEBUG_ITEM
     PgmPrint("Found ");Serial.print(nb_item);PgmPrintln(" items");
 #endif
-
-    /* increase until separate item is found */
-    while (g_buff[index] != SEPARATE_ITEM)
-	index++;
 
     /* Save items to struct */
     state = STATE_SEPARATION;
@@ -1253,11 +1179,20 @@ void read_item_in_file(char item_value, char *file)
 		    /* set end of string for last item */
 		    g_data_item[item].clas[j] = 0;
 
+#ifdef DEBUG_ITEM
+		    PgmPrint("item    = ");Serial.println(item);
+		    PgmPrint("date    = ");Serial.println(g_data_item[item].date);
+		    PgmPrint("hour    = ");Serial.println(g_data_item[item].hour);
+		    PgmPrint("state   = ");Serial.println(g_data_item[item].state);
+		    PgmPrint("class   = ");Serial.println(g_data_item[item].clas);
+#endif
+
 		    /* switch to next state */
 		    state = STATE_SEPARATION;
 		    j     = 0;
 		    item++;
 		    nb_item--;
+
 		}
 		else
 		{
