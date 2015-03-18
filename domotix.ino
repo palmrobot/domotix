@@ -1089,7 +1089,7 @@ void read_item_in_file(char item_value, char *file)
 
     /* search for the last 7 items */
     nb_item = 0;
-    while((index > 0) && (nb_item <= 7))
+    while((index > 0) && (nb_item < 7))
     {
 	if (g_buff[index] == SEPARATE_ITEM)
 	{
@@ -1537,8 +1537,6 @@ void process_domotix(void)
 	    PgmPrint("Lingerie lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
 	}
-
-	delay(10);
     }
 }
 
@@ -1602,4 +1600,5 @@ void loop(void)
     process_time();
     process_domotix();
     process_schedule();
+    delay(500);
 }
