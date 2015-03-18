@@ -5,10 +5,10 @@
 #include <Ethernet.h>
 #include <LiquidCrystal.h>
 
-#define DEBUG
+/* #define DEBUG */
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
-#define DEBUG_ITEM
+/* #define DEBUG_ITEM
 
 #define VERSION				"v2.4"
 
@@ -108,10 +108,10 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 typedef struct
 {
     char item;
-    char date[16+1];
-    char hour[16+1];
-    char state[16+1];
-    char clas[16+1];
+    char date[10+1];
+    char hour[8+1];
+    char state[2+1];
+    char clas[2+1];
 }data_item_t;
 
 #define NB_ITEM				7
@@ -1002,7 +1002,7 @@ void read_item_in_file(char item_value, char *file)
     int32_t	index;
     File	fd;
     char	nb_item;
-    char	item;
+    uint8_t	item;
     uint8_t	state;
     uint8_t	i,j;
     char	value;
@@ -1178,14 +1178,6 @@ void read_item_in_file(char item_value, char *file)
 		{
 		    /* set end of string for last item */
 		    g_data_item[item].clas[j] = 0;
-
-#ifdef DEBUG_ITEM
-		    PgmPrint("item    = ");Serial.println(item);
-		    PgmPrint("date    = ");Serial.println(g_data_item[item].date);
-		    PgmPrint("hour    = ");Serial.println(g_data_item[item].hour);
-		    PgmPrint("state   = ");Serial.println(g_data_item[item].state);
-		    PgmPrint("class   = ");Serial.println(g_data_item[item].clas);
-#endif
 
 		    /* switch to next state */
 		    state = STATE_SEPARATION;
