@@ -8,9 +8,9 @@
 /* #define DEBUG */
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
-/* #define DEBUG_ITEM
+/* #define DEBUG_ITEM */
 
-#define VERSION				"v2.4"
+#define VERSION				"v2.5"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -30,8 +30,8 @@
 #define CS_PIN_SDCARD			4
 #define PIN_LINGERIE_CUISINE		3 /* K */
 #define PIN_GARAGE_FOND			2 /* H */
-#define PIN_CUISINE_EXT			1 /* L */
-#define PIN_LINGERIE_FENETRE		0 /* N */
+#define PIN_CUISINE_EXT			12 /* L */
+#define PIN_LINGERIE_FENETRE		11 /* N */
 
 #define PIN_SS_ETH_CONTROLLER		53
 
@@ -108,10 +108,10 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
 typedef struct
 {
     char item;
-    char date[10+1];
-    char hour[8+1];
-    char state[2+1];
-    char clas[2+1];
+    char date[12];
+    char hour[12];
+    char state[4];
+    char clas[4];
 }data_item_t;
 
 #define NB_ITEM				7
@@ -163,8 +163,6 @@ state_porte_s g_lingerie_porte_cuisine; /* K */
 state_porte_s g_cuisine_porte_ext; /* L */
 state_lumiere_s g_temperature_ext; /* M */
 state_porte_s g_lingerie_fenetre; /* N */
-
-state_porte_s g_default; /*  */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	70
@@ -262,25 +260,32 @@ void setup(void)
     g_save_temp = 0;
 
     /* Init global var for web code */
-    g_default.curr = 1;
-    g_default.old  = 1;
-
     g_garage_droite.old = 0;
     g_garage_gauche.old = 0;
     g_garage_fenetre.old = 0;
     g_garage_lumiere_etabli.old = 0;
     g_garage_lumiere_etabli.state_old = 0;
+    g_garage_lumiere_etabli.state_curr = 0;
+    g_garage_lumiere.old = 0;
+    g_garage_lumiere.state_old = 0;
+    g_garage_lumiere.state_curr = 0;
+    g_garage_porte.old = 0;
+
     g_cellier_porte_ext.old = 0;
     g_cellier_porte.old = 0;
     g_cellier_lumiere.old = 0;
     g_cellier_lumiere.state_old = 0;
-    g_garage_porte.old = 0;
+    g_cellier_lumiere.state_curr = 0;
+
     g_lingerie_lumiere.old = 0;
     g_lingerie_lumiere.state_old = 0;
+    g_lingerie_lumiere.state_curr = 0;
     g_lingerie_porte_cuisine.old = 0;
+    g_lingerie_fenetre.old = 0;
+
     g_cuisine_porte_ext.old = 0;
     g_temperature_ext.old = 0;
-    g_lingerie_fenetre.old = 0;
+
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -389,19 +394,19 @@ void deal_with_file(char item, char type, char code)
     {
 	case '0':
 	{
-	    g_client.print(ptr_item->date);
+	    g_client.write((uint8_t*)ptr_item->date,strlen(ptr_item->date));
 	}break;
 	case '1':
 	{
-	    g_client.print(ptr_item->hour);
+	    g_client.write((uint8_t*)ptr_item->hour,strlen(ptr_item->hour));
 	}break;
 	case '2':
 	{
-	    g_client.print(ptr_item->state);
+	    g_client.write((uint8_t*)ptr_item->state,strlen(ptr_item->state));
 	}break;
 	case '3':
 	{
-	    g_client.print(ptr_item->clas);
+	    g_client.write((uint8_t*)ptr_item->clas,strlen(ptr_item->clas));
 	}break;
 	default:
 	break;
@@ -1001,7 +1006,7 @@ void read_item_in_file(char item_value, char *file)
     uint32_t	file_size;
     int32_t	index;
     File	fd;
-    char	nb_item;
+    uint8_t	nb_item;
     uint8_t	item;
     uint8_t	state;
     uint8_t	i,j;
@@ -1114,13 +1119,14 @@ void read_item_in_file(char item_value, char *file)
 	switch (state)
 	{
 	    case STATE_SEPARATION:
-	    if (g_buff[index] == '\n')
 	    {
-		/* switch to next state */
-		state = STATE_DATE;
-		j     = 0;
-	    }
-	    break;
+		if (g_buff[index] == '\n')
+		{
+		    /* switch to next state */
+		    state = STATE_DATE;
+		    j     = 0;
+		}
+	    }break;
 	    case STATE_DATE:
 	    {
 		if (g_buff[index] == '\n')
@@ -1197,13 +1203,13 @@ void read_item_in_file(char item_value, char *file)
 
 
 #ifdef DEBUG_ITEM
-    PgmPrint("Nb item =");Serial.println(item);
+    PgmPrint("Nb item = ");Serial.println(item);
 
 
     for(j=0;j<item ;j++ )
     {
 
-	PgmPrint("nb item = ");Serial.print(j);Serial.print("/");Serial.println(item);
+	PgmPrint("nb item = ");Serial.print(j+1);Serial.print("/");Serial.println(item);
 	PgmPrint("date    = ");Serial.println(g_data_item[j].date);
 	PgmPrint("hour    = ");Serial.println(g_data_item[j].hour);
 	PgmPrint("state   = ");Serial.println(g_data_item[j].state);
