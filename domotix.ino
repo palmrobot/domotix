@@ -10,7 +10,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v2.5"
+#define VERSION				"v2.6"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -79,6 +79,8 @@ char g_full_list_name[13];
 
 #define SIZE_CODE_HTML			10
 char g_code_html[SIZE_CODE_HTML];
+
+#define MAX_FILE_SIZE			4000 /* 4Ko */
 
 typedef struct
 {
@@ -180,13 +182,13 @@ uint8_t g_debug = 0;
 char  g_clock[9];
 char  g_date[9];
 uint8_t g_NTP = 0;
-uint8_t g_save_temp = 0;
+uint8_t g_sched_temperature = 0;
 
 /********************************************************/
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			1
+#define TIMEZONE			2
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
@@ -257,7 +259,6 @@ void setup(void)
     /* Init global var */
     g_debug = 0;
     g_NTP   = 0;
-    g_save_temp = 0;
 
     /* Init global var for web code */
     g_garage_droite.old = 0;
@@ -286,6 +287,7 @@ void setup(void)
     g_cuisine_porte_ext.old = 0;
     g_temperature_ext.old = 0;
 
+    g_sched_temperature = 0;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -1219,11 +1221,53 @@ void read_item_in_file(char item_value, char *file)
 
 }
 
+void copy_file(const char *file)
+{
+    File  fd;
+    File  fd_backup;
+    uint32_t sizefile;
+    char value_read;
+    char file_date[15];
+
+    fd = SD.open(file, FILE_READ);
+
+    /* Check file size */
+    sizefile = fd.size();
+
+    if (sizefile > MAX_FILE_SIZE)
+    {
+	/* create new file */
+	sprintf(file_date,"%c%02d%02d%02d.TXT",file[0], day(), month(), year()-2000);
+
+	fd_backup = SD.open(file_date, FILE_WRITE);
+
+	/* copy the file to his backup */
+	while (fd.available())
+	{
+	    value_read = fd.read();
+	    fd_backup.write((const uint8_t*)value_read, 1);
+	}
+	fd_backup.close();
+	fd.close();
+
+	/* and then remove file to empty it*/
+	SD.remove((char*)file);
+    }
+    else
+    {
+	fd.close();
+    }
+}
+
 void save_entry(const char *file, uint8_t value, uint8_t type)
 {
     File  fd;
+    File  fd_backup;
     code_t *class_html;
     code_t *state;
+    uint32_t sizefile;
+    char value_read;
+    char file_date[15];
 
     /* write in file
      * Format :
@@ -1238,7 +1282,11 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
     if (g_NTP == 0)
 	return;
 
+    /* check if file is too big, then save it */
+    copy_file(file);
+
     fd = SD.open(file, FILE_WRITE);
+
     fd.println(SEPARATE_ITEM);
     fd.println(g_date);
     fd.println(g_clock);
@@ -1266,7 +1314,11 @@ void save_entry_temp(const char *file, int value)
     if (g_NTP == 0)
 	return;
 
+    /* check if file is too big, then save it */
+    copy_file(file);
+
     fd = SD.open(file, FILE_WRITE);
+
     fd.println(SEPARATE_ITEM);
     fd.println(g_date);
     fd.println(g_clock);
@@ -1560,30 +1612,42 @@ void process_time(void)
 
 void process_schedule(void)
 {
-    int h;
+    int ho;
+    int mi;
+    int da;
+    int mo;
 
     if (g_process_schedule != PROCESS_SCHEDULE_OFF)
     {
-	    h = hour();
+	/* get time values */
+	ho = hour();
+	mi = minute();
+	da = day();
+	mo = month();
 
-	    if ((h == 8) || (h == 14) || (h == 20))
+	/*************************************/
+	/* Scheduling for temperature sensor */
+	if ((ho == 8) || (ho == 14) || (ho == 20))
+	{
+	    if (g_sched_temperature == 0)
 	    {
-		if (g_save_temp == 0)
-		{
-		    g_save_temp = 1;
+		g_sched_temperature = 1;
 
-		    /* save current date and clock in global var */
-		    digitalClock();
-		    digitalDate();
+		/* save current date and clock in global var */
+		digitalClock();
+		digitalDate();
 
-		    /* write in file  */
-		    save_entry_temp("M.txt", g_temperature_ext.curr);
-		}
+		/* write in file  */
+		save_entry_temp("M.txt", g_temperature_ext.curr);
 	    }
-	    else
-	    {
-		g_save_temp = 0;
-	    }
+	}
+	else
+	{
+	    g_sched_temperature = 0;
+	}
+
+	/*************************************/
+
     }
 }
 
