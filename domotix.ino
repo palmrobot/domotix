@@ -10,7 +10,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v2.8"
+#define VERSION				"v3.0"
 
 /********************************************************/
 /*      Pin  definitions                                */
