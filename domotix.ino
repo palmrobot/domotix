@@ -37,6 +37,27 @@
 
 
 /********************************************************/
+/*      Serial Motor definitions                        */
+/********************************************************/
+
+#define GSM_SEND_COMMAND_STOP			0x01 /* [0x01 Stop] */
+#define GSM_SEND_COMMAND_FORWARD		0x02 /* [0x02 Forward] [Speed] [distance in cm] */
+#define GSM_SEND_COMMAND_BACKWARD		0x03 /* [0x03 Backward] [Speed] [distance in cm] */
+#define GSM_SEND_COMMAND_ROTATE_LEFT		0x04 /* [0x04 Rotate Left] [Speed] [degrees]   */
+#define GSM_SEND_COMMAND_ROTATE_RIGHT		0x05 /* [0x05 Rotate Right] [Speed] [degrees]  */
+#define GSM_SEND_COMMAND_TEST			0x06 /* [0x06 Test] [Nb of writes] [write 1] [write 2] ... [write n] */
+#define GSM_SEND_COMMAND_COUNTERS_CM		0x07 /* [0x07 Get counters in centimeters] */
+#define GSM_SEND_COMMAND_COUNTERS		0x08 /* [0x08 Get counters] */
+#define GSM_SEND_COMMAND_COUNTERS_DEG		0x09 /* [0x09 Get counters in degrees] */
+#define GSM_SEND_COMMAND_DETECTION		0x0A /* [0x0A Get Detection */
+
+#define GSM_SEND_COMMAND_START			0xFE /* [0xFE Start transmission] */
+
+#define CMD_DATA_MAX				6
+uint8_t g_send_gsm[CMD_DATA_MAX];
+uint8_t g_recv_gsm[CMD_DATA_MAX];
+
+/********************************************************/
 /*      Process definitions                             */
 /********************************************************/
 uint8_t g_process_serial;
@@ -59,6 +80,19 @@ uint8_t g_process_time;
 uint8_t g_process_schedule;
 #define PROCESS_SCHEDULE_OFF		0
 #define PROCESS_SCHEDULE_ON		1
+
+uint8_t g_process_recv_gsm;
+#define PROCESS_RECV_GSM_DO_NOTHING	0
+#define PROCESS_RECV_GSM_WAIT_COMMAND	1
+
+uint8_t g_process_gsm;
+#define PROCESS_GSM_TEST		0x40 /* [0x40 Test] [Nb of writes] [write 1] [write 2] ... [write n] */
+#define PROCESS_GSM_COUNTERS		0x41 /* [0x41 Counters] [Left] [right] */
+#define PROCESS_GSM_READY		0x42 /* [0x42 Ready] */
+#define PROCESS_GSM_STOP		0x43
+#define PROCESS_GSM_DETECT		0x44
+#define PROCESS_GSM_RUNNING_DETECTION	0x45
+#define PROCESS_GSM_START		0xFE /* Start transmission */
 
 /********************************************************/
 /*      Global definitions                              */
@@ -235,6 +269,8 @@ void setup(void)
     g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
     g_process_schedule = PROCESS_SCHEDULE_ON;
+    g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
+    g_process_gsm      = PROCESS_RECV_GSM_DO_NOTHING;
 
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
@@ -340,6 +376,30 @@ void ClientPrintln_P(PGM_P str)
 {
   ClientPrint_P(str);
   g_client.println();
+}
+
+/* Mother -> Gsm */
+/*  Start ->       */
+/*  Cmd   ->       */
+/*  Data1 ->       */
+/*  Data2 ->       */
+/*  Data3 ->       */
+/*  Data4 ->       */
+void send_gsm(uint8_t *buffer, int len)
+{
+    uint8_t padding[CMD_DATA_MAX] = {0,0,0,0,0,0};
+
+    if (len > CMD_DATA_MAX)
+	len = CMD_DATA_MAX;
+
+    /* Send Start of transmission */
+    Serial.write(GSM_SEND_COMMAND_START);
+
+    /* Write Command + Data */
+    Serial.write(buffer, len);
+
+    /* Write padding Data */
+    Serial.write(padding, CMD_DATA_MAX - len);
 }
 
 
