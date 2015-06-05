@@ -11,46 +11,44 @@
 /********************************************************/
 /*      Serial GSM  definitions                         */
 /********************************************************/
-#define COMMAND_START			0xFE /* [0xFE Start transmission] */
 
-#define COMMAND_TEST			0x80 /* [0x80 Test] [Nb of bytes] [byte 1] [byte 2] ... [byte n] */
-#define COMMAND_TEST2			0x81 /* [0x81 Test2] [data1] [data2] */
-#define COMMAND_READY			0x82 /* [0x82 Ready] */
-#define COMMAND_INIT_ERROR		0x83 /* [0x84 End of file] */
-#define COMMAND_INIT_FAT_ERROR		0x84 /* [0x84 End of file] */
-#define COMMAND_INIT_ROOT_ERROR		0x85 /* [0x85 End of file] */
-#define COMMAND_PLAYING_FILE		0x86 /* [0x86 File is playing] */
-#define COMMAND_PLAY_END		0x87 /* [0x87 End of file] */
-#define COMMAND_FILE_NUMBER		0x88 /* [0x88 Number of file] */
+#define CMD_RECV_DATA_MAX			6
+uint8_t g_recv_from_mother[CMD_RECV_DATA_MAX];
 
-#define CMD_SEND_DATA_MAX		16
-uint8_t g_send_mother[CMD_SEND_DATA_MAX];
+#define COMMAND_RECV_START			0xFE /* [0xFE Start transmission] */
 
-#define CMD_DATA_MAX			6
-uint8_t g_recv_mother[CMD_DATA_MAX];
+#define COMMAND_RECV_TEST			0x80 /* [0x80 Test] [Nb of bytes] [byte 1] [byte 2] ... [byte n] */
+#define COMMAND_RECV_TEST2			0x81 /* [0x81 Test2] [data1] [data2] */
+#define COMMAND_RECV_INIT			0x82 /* [0x82 Init] */
+#define COMMAND_RECV_SMS1			0x83 /* [0x83 SMS1] */
+#define COMMAND_RECV_SMS2			0x84 /* [0x84 SMS2] */
+
+
+#define CMD_SEND_DATA_MAX			16
+uint8_t g_send_to_mother[CMD_SEND_DATA_MAX];
+
+#define COMMAND_SEND_START			0xFE /* [0xFE Start transmission */
+#define COMMAND_SEND_INIT_OK			0xD1 /* [0xD1 Init OK] */
+#define COMMAND_SEND_INIT_FAILED		0xD2 /* [0xD2 Init Failed ] */
+#define COMMAND_SEND_ACTION_SMS1		0xD3 /* [0xD3 SMS For Action 1 ] */
+#define COMMAND_SEND_ACTION_SMS2		0xD4 /* [0xD4 SMS For Action 2 ] */
+
 
 /********************************************************/
 /*      Process definitions                             */
 /********************************************************/
 
-#define PROCESS_RECEIVE_DO_NOTHING		0
+
 #define PROCESS_RECEIVE_WAIT_COMMAND		1
 uint8_t g_process_recv_command;
 
-#define PROCESS_ACTION_INIT			0x01
-uint16_t g_process_action;
+#define PROCESS_ACTION_INIT			COMMAND_RECV_INIT
+#define PROCESS_ACTION_SMS1			COMMAND_RECV_SMS1
+#define PROCESS_ACTION_SMS2			COMMAND_RECV_SMS2
+uint8_t g_process_action;
 
-#define PROCESS_SEND_LIST			0xD1 /* [0xD1 List] */
-#define PROCESS_SEND_FILENAME			0xD2 /* [0xD2 Number of the file to get name ] */
-#define PROCESS_SEND_PLAYFILE			0xD3 /* [0xD3 Play this file number */
-#define PROCESS_SEND_STOP_PLAYING		0xD4 /* [0xD4 Stop playing] */
-#define PROCESS_SEND_BEEP_KEY			0xD5 /* [0xD5 Playing Beep] */
-#define PROCESS_SEND_NOTE			0xD6 /* [0xD6 Playing Note] */
-#define PROCESS_SEND_MOTOR			0xD7 /* [0xD7 Playing motor sound] */
-#define PROCESS_SEND_HELLO			0xD8 /* [0xD8 Playing hello sound] */
 
-#define PROCESS_SEND_START			0xFE /* [0xFE Start transmission */
-uint8_t g_process_send_command;
+uint8_t g_process_check_gsm;
 
 /********************************************************/
 /*      Global definitions                              */
@@ -98,7 +96,7 @@ void send_mother(uint8_t *buffer, int len)
 	len = CMD_SEND_DATA_MAX;
 
     /* Send Start of transmission */
-    Serial.write(COMMAND_START);
+    Serial.write(COMMAND_SEND_START);
 
     /* Write Command + Data */
     Serial.write(buffer, len);
@@ -115,26 +113,26 @@ void process_recv_command(void)
 {
     uint8_t value;
 
-    if (g_process_recv_command)
+    if (g_process_recv_command == PROCESS_RECEIVE_WAIT_COMMAND)
     {
 	/* if we get a valid char, read char */
 	if (Serial.available() > 0)
 	{
 	    /* get Start Byte */
 	    value = Serial.read();
-	    if (value == COMMAND_START)
+	    if (value == COMMAND_RECV_START)
 	    {
 		/* Wait for serial */
-		while (Serial.available() < CMD_DATA_MAX);
+		while (Serial.available() < CMD_RECV_DATA_MAX);
 
-		for(g_recv_mother_nb = 0; g_recv_mother_nb < CMD_DATA_MAX; g_recv_mother_nb++)
+		for(g_recv_mother_nb = 0; g_recv_mother_nb < CMD_RECV_DATA_MAX; g_recv_mother_nb++)
 		{
 		    /* get incoming write: */
-		    g_recv_mother[g_recv_mother_nb] = Serial.read();
+		    g_recv_from_mother[g_recv_from_mother_nb] = Serial.read();
 		}
 
 		/* Set action plan */
-		g_process_action = g_recv_mother[0];
+		g_process_action = g_recv_from_mother[0];
 
 		/* Disable communication ,wait for message treatment */
 		g_process_recv_command  = 0;
@@ -144,20 +142,12 @@ void process_recv_command(void)
 }
 
 
-void process_send_command(void)
+void process_check_gsm(void)
 {
-
-    if (g_process_send_command)
+    if (g_process_check_gsm)
     {
-	if (g_process_send_command == PROCESS_SEND_LIST)
-	{
-	    g_send_mother[0] = 0;
-	    g_send_mother[1] = 1;
-	    send_mother(g_send_mother, 2);
-	}
 
-	g_process_recv_command = PROCESS_RECEIVE_WAIT_COMMAND;
-	g_process_send_command = 0;
+
     }
 }
 
@@ -165,16 +155,22 @@ void process_action(void)
 {
     if (g_process_action)
     {
-	if ((g_process_action & PROCESS_ACTION_INIT) == PROCESS_ACTION_INIT)
+	if (g_process_action == PROCESS_ACTION_INIT)
 	{
 	    /* init GSM */
 
 
 	    /* Then send OK is ready */
-	    g_send_mother[0] = COMMAND_READY;
-	    send_mother(g_send_mother, 1);
+	    g_send_to_mother[0] = COMMAND_SEND_INIT_OK;
+	    send_mother(g_send_to_mother, 1);
+	}
+	else if (g_process_action == PROCESS_ACTION_SMS1)
+	{
 
-	    g_process_action &= ~PROCESS_ACTION_INIT;
+	}
+	else if (g_process_action == PROCESS_ACTION_SMS2)
+	{
+
 	}
     }
 }
