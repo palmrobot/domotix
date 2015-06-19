@@ -3,6 +3,23 @@
 
 
 /********************************************************/
+/*      State  definitions                              */
+/********************************************************/
+/*
+Master Board                   GSM Board
+    |                             |
+  Start                         Start
+    |                             |
+   Init                        Init GSM
+    |                             |
+  Ask for ready ? INIT----------->
+    |                             |
+  Recv Ready <--------- INIT_OK Ready
+    |                             |
+  Ready to send message           |
+*/
+
+/********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
 
@@ -12,8 +29,8 @@
 /*      Serial GSM  definitions                         */
 /********************************************************/
 
-#define CMD_RECV_DATA_MAX			6
-uint8_t g_recv_from_mother[CMD_RECV_DATA_MAX];
+#define CMD_DATA_MAX			6
+uint8_t g_recv_from_mother[CMD_DATA_MAX];
 
 #define COMMAND_RECV_START			0xFE /* [0xFE Start transmission] */
 
@@ -24,8 +41,7 @@ uint8_t g_recv_from_mother[CMD_RECV_DATA_MAX];
 #define COMMAND_RECV_SMS2			0x84 /* [0x84 SMS2] */
 
 
-#define CMD_SEND_DATA_MAX			16
-uint8_t g_send_to_mother[CMD_SEND_DATA_MAX];
+uint8_t g_send_to_mother[CMD_DATA_MAX];
 
 #define COMMAND_SEND_START			0xFE /* [0xFE Start transmission */
 #define COMMAND_SEND_INIT_OK			0xD1 /* [0xD1 Init OK] */
@@ -48,12 +64,15 @@ uint8_t g_process_recv_command;
 uint8_t g_process_action;
 
 
-uint8_t g_process_check_gsm;
+uint8_t g_process_recv_gsm_sms;
 
 /********************************************************/
 /*      Global definitions                              */
 /********************************************************/
 
+#define GSM_INIT_FAILED				0
+#define GSM_INIT_OK				1
+uint8_t g_gsm_init;
 
 
 void setup()
@@ -62,12 +81,13 @@ void setup()
 
 
     /* init process states */
-    g_process_receive   = PROCESS_RECEIVE_WAIT_COMMAND;
-    g_process_command   = 0;
-    g_process_action    = PROCESS_ACTION_INIT;
+    g_process_receive		= PROCESS_RECEIVE_WAIT_COMMAND;
+    g_process_recv_command	= 0;
+    g_process_action		= PROCESS_ACTION_INIT;
+    g_process_recv_gsm_sms	= 0;
 
     /* Init global variables */
-
+    g_gsm_init			 = GSM_INIT_FAILED;
 
     /* init pipes */
     g_recv_mother[0]	= 0;
@@ -142,10 +162,11 @@ void process_recv_command(void)
 }
 
 
-void process_check_gsm(void)
+void process_recv_gsm_sms(void)
 {
-    if (g_process_check_gsm)
+    if (g_process_recv_gsm_sms)
     {
+	/* check if a message has been received */
 
 
     }
@@ -163,6 +184,15 @@ void process_action(void)
 	    /* Then send OK is ready */
 	    g_send_to_mother[0] = COMMAND_SEND_INIT_OK;
 	    send_mother(g_send_to_mother, 1);
+
+	    g_gsm_init = GSM_INIT_OK;
+
+	    /* start polling sms */
+	    g_process_recv_gsm_sms = 1;
+
+	    /* restart waiting for command */
+	    g_process_recv_command == PROCESS_RECEIVE_WAIT_COMMAND;
+
 	}
 	else if (g_process_action == PROCESS_ACTION_SMS1)
 	{
@@ -172,14 +202,17 @@ void process_action(void)
 	{
 
 	}
+
+	/* end of action, wait for a new one */
+	g_process_action = 0;
     }
 }
 
 void loop()
 {
     process_recv_command();
-    process_send_command();
     process_action();
+    process_recv_gsm_sms();
 }
 
 

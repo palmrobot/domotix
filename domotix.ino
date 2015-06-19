@@ -3,7 +3,6 @@
 #include <Time.h>
 #include <SD.h>
 #include <Ethernet.h>
-#include <LiquidCrystal.h>
 
 /* #define DEBUG */
 /* #define DEBUG_HTML */
@@ -27,17 +26,27 @@
 #define PIN_GARAGE_FENETRE		7 /* C */
 #define PIN_CELLIER_PORTE_EXT		6 /* E */
 #define PIN_CELLIER_PORTE_INT		5 /* F */
-#define CS_PIN_SDCARD			4
 #define PIN_LINGERIE_CUISINE		3 /* K */
 #define PIN_GARAGE_FOND			2 /* H */
 #define PIN_CUISINE_EXT			12 /* L */
 #define PIN_LINGERIE_FENETRE		11 /* N */
+#define PIN_				10
+#define PIN_				13
 
-#define PIN_SS_ETH_CONTROLLER		53
+#define PIN_OUT_LIGHT_1			40
+
+
+/* Reserverd Pins */
+#define CS_PIN_SDCARD			4
+#define PIN_ETHER_CTRL1			50
+#define PIN_ETHER_CTRL2			51
+#define PIN_ETHER_CTRL3			52
+#define PIN_ETHER_SELECT		53
+
 
 
 /********************************************************/
-/*      Serial Motor definitions                        */
+/*      Serial GSM definitions                        */
 /********************************************************/
 
 #define GSM_SEND_COMMAND_STOP			0x01 /* [0x01 Stop] */
@@ -56,43 +65,47 @@
 #define CMD_DATA_MAX				6
 uint8_t g_send_gsm[CMD_DATA_MAX];
 uint8_t g_recv_gsm[CMD_DATA_MAX];
+uint8_t g_recv_gsm_nb;
 
 /********************************************************/
 /*      Process definitions                             */
 /********************************************************/
 uint8_t g_process_serial;
-#define PROCESS_SERIAL_OFF		0
-#define PROCESS_SERIAL_ON		1
+#define PROCESS_SERIAL_OFF			0
+#define PROCESS_SERIAL_ON			1
 
 uint8_t g_process_ethernet;
-#define PROCESS_ETHERNET_OFF		0
-#define PROCESS_ETHERNET_ON		1
+#define PROCESS_ETHERNET_OFF			0
+#define PROCESS_ETHERNET_ON			1
 
 
 uint8_t g_process_domotix;
-#define PROCESS_DOMOTIX_OFF		0
-#define PROCESS_DOMOTIX_ON		1
+#define PROCESS_DOMOTIX_OFF			0
+#define PROCESS_DOMOTIX_ON			1
 
 uint8_t g_process_time;
-#define PROCESS_TIME_OFF		0
-#define PROCESS_TIME_ON			1
+#define PROCESS_TIME_OFF			0
+#define PROCESS_TIME_ON				1
 
 uint8_t g_process_schedule;
-#define PROCESS_SCHEDULE_OFF		0
-#define PROCESS_SCHEDULE_ON		1
+#define PROCESS_SCHEDULE_OFF			0
+#define PROCESS_SCHEDULE_ON			1
+
+uint8_t g_process_action;
+#define PROCESS_ACTION_NONE			0
+#define PROCESS_ACTION_SWITCH_ON_LIGHT_1	1
+#define PROCESS_ACTION_SWITCH_OFF_LIGHT_1	2
 
 uint8_t g_process_recv_gsm;
-#define PROCESS_RECV_GSM_DO_NOTHING	0
-#define PROCESS_RECV_GSM_WAIT_COMMAND	1
+#define PROCESS_RECV_GSM_DO_NOTHING		0
+#define PROCESS_RECV_GSM_WAIT_COMMAND		1
 
-uint8_t g_process_gsm;
-#define PROCESS_GSM_TEST		0x40 /* [0x40 Test] [Nb of writes] [write 1] [write 2] ... [write n] */
-#define PROCESS_GSM_COUNTERS		0x41 /* [0x41 Counters] [Left] [right] */
-#define PROCESS_GSM_READY		0x42 /* [0x42 Ready] */
-#define PROCESS_GSM_STOP		0x43
-#define PROCESS_GSM_DETECT		0x44
-#define PROCESS_GSM_RUNNING_DETECTION	0x45
-#define PROCESS_GSM_START		0xFE /* Start transmission */
+uint8_t g_process_send_gsm;
+#define PROCESS_GSM_START			0xFE /* Start transmission */
+
+
+
+
 
 /********************************************************/
 /*      Global definitions                              */
@@ -262,6 +275,7 @@ void setup(void)
     pinMode(PIN_LINGERIE_FENETRE, INPUT);
 
     pinMode(PIN_SS_ETH_CONTROLLER, OUTPUT);
+    pinMode(PIN_OUT_LIGHT_1, OUTPUT);
 
     /* init Process */
     g_process_serial   = PROCESS_SERIAL_ON;
@@ -269,13 +283,16 @@ void setup(void)
     g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
     g_process_schedule = PROCESS_SCHEDULE_ON;
+    g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
-    g_process_gsm      = PROCESS_RECV_GSM_DO_NOTHING;
 
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
     Serial.begin(115200);
 #endif
+
+    /* initialize the serial communications with GSM Board */
+    Serial1.begin(115200);
 
     /* start the Ethernet connection and the server: */
     Ethernet.begin(g_mac_addr, g_ip_addr);
@@ -393,13 +410,13 @@ void send_gsm(uint8_t *buffer, int len)
 	len = CMD_DATA_MAX;
 
     /* Send Start of transmission */
-    Serial.write(GSM_SEND_COMMAND_START);
+    Serial1.write(GSM_SEND_COMMAND_START);
 
     /* Write Command + Data */
-    Serial.write(buffer, len);
+    Serial1.write(buffer, len);
 
     /* Write padding Data */
-    Serial.write(padding, CMD_DATA_MAX - len);
+    Serial1.write(padding, CMD_DATA_MAX - len);
 }
 
 
@@ -888,6 +905,38 @@ void process_serial(void)
     }
 }
 #endif
+
+void process_recv_gsm(void)
+{
+    uint8_t value;
+
+    if (g_process_recv_gsm)
+    {
+	/* if we get a valid char, read char */
+	if (Serial1.available() > 0)
+	{
+	    /* get Start Byte */
+	    value = Serial1.read();
+	    if (value == PROCESS_GSM_START)
+	    {
+		/* Wait for serial */
+		while (Serial1.available() < CMD_DATA_MAX);
+
+		for(g_recv_gsm_nb = 0; g_recv_gsm_nb < CMD_DATA_MAX; g_recv_gsm_nb++)
+		{
+		    /* get incoming write: */
+		    g_recv_gsm[g_recv_gsm_nb] = Serial1.read();
+		}
+		/* Set action plan */
+		g_process_action = g_recv_gsm[0];
+
+		/* Disable communication ,wait for message treatment */
+		g_process_recv_gsm   = 0;
+	    }
+	}
+    }
+}
+
 
 void process_ethernet(void)
 {
@@ -1389,10 +1438,13 @@ void save_entry_temp(const char *file, int value)
 
 void process_domotix(void)
 {
+    char delay;
+
     /* save current date and clock in global var */
     digitalClock();
     digitalDate();
 
+    delay = 0;
     if (g_process_domotix != PROCESS_DOMOTIX_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
@@ -1406,6 +1458,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
@@ -1419,6 +1472,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
@@ -1432,6 +1486,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
@@ -1445,6 +1500,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
@@ -1458,6 +1514,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte lingerie :");Serial.println(g_cellier_porte.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
@@ -1471,6 +1528,7 @@ void process_domotix(void)
 #ifdef DEBUG
 	    PgmPrint("Lingerie porte cuisine :");Serial.println(g_lingerie_porte_cuisine.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
@@ -1484,6 +1542,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fond :");Serial.println(g_garage_porte.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
@@ -1497,6 +1556,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
@@ -1510,6 +1570,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
 #endif
+	    delay = 1;
 	}
 
 
@@ -1549,6 +1610,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
@@ -1577,6 +1639,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_lumiere.curr);
 #endif
+	    delay = 1;
 	}
 
 	int value = analogRead(PIN_TEMP_EXT);
@@ -1590,6 +1653,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Temperature Ext:");Serial.println(g_temperature_ext.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
@@ -1618,6 +1682,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
 #endif
+	    delay = 1;
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
@@ -1646,6 +1711,13 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
+	    delay = 1;
+	}
+
+	if (delay)
+	{
+	    /* wait some time, before testing the next time the inputs */
+	    delay(500);
 	}
     }
 }
@@ -1711,6 +1783,23 @@ void process_schedule(void)
     }
 }
 
+void process_action(void)
+{
+    if (g_process_action != PROCESS_ACTION_NONE)
+    {
+	if (g_process_action == PROCESS_ACTION_SWITCH_ON_LIGHT_1)
+	{
+	    digitalWrite(PIN_OUT_LIGHT_1, 1);
+	}
+	else if (g_process_action == PROCESS_ACTION_SWITCH_OFF_LIGHT_1)
+	{
+	    digitalWrite(PIN_OUT_LIGHT_1, 0);
+	}
+
+	/* Reset action, wait for next one */
+	g_process_action = 0;
+    }
+}
 
 
 void loop(void)
@@ -1719,8 +1808,9 @@ void loop(void)
 #ifdef DEBUG
     process_serial();
 #endif
+    process_recv_gsm();
     process_time();
     process_domotix();
     process_schedule();
-    delay(500);
+    process_action();
 }
