@@ -183,6 +183,7 @@ char  g_clock[9];
 char  g_date[9];
 uint8_t g_NTP = 0;
 uint8_t g_sched_temperature = 0;
+uint8_t g_init = 0;
 
 /********************************************************/
 /*      NTP			                        */
@@ -259,6 +260,7 @@ void setup(void)
     /* Init global var */
     g_debug = 0;
     g_NTP   = 0;
+    g_init  = 1;
 
     /* Init global var for web code */
     g_garage_droite.old = 0;
@@ -454,9 +456,12 @@ void deal_with_code(char item, char type, char code)
 	    /* save current date and clock in global var */
 	    digitalClock();
 	    digitalDate();
-	    g_client.print(g_clock);
-	    g_client.print("  ");
-	    g_client.print(g_date);
+	    if (g_NTP)
+	    {
+		g_client.print(g_clock);
+		g_client.print("  ");
+		g_client.print(g_date);
+	    }
 
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
@@ -896,7 +901,6 @@ void process_ethernet(void)
 		    exit = 1;
 		}
 	    }
-
 	    /********** Parsing Line received **************/
 	    if ((g_page_web & WEB_EOL) == WEB_EOL)
 	    {
@@ -993,11 +997,12 @@ void process_ethernet(void)
 		g_client.println();
 		PgmClientPrintln("<h2>Domotix Error: GET /  Error, line too long!</h2>");
 	    }
-	/* close connection */
-	delay(5);
-	g_client.stop();
+	    /* close connection */
+	    delay(5);
+	    g_client.stop();
+
 #ifdef DEBUG_HTML
-	PgmPrintln("Connection Closed");
+	    PgmPrintln("Connection Closed");
 #endif
 	}
     }
@@ -1336,7 +1341,7 @@ void process_domotix(void)
     if (g_process_domotix != PROCESS_DOMOTIX_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
-	if (g_garage_droite.curr != g_garage_droite.old)
+	if ((g_garage_droite.curr != g_garage_droite.old) || (g_init))
 	{
 	    g_garage_droite.old = g_garage_droite.curr;
 
@@ -1349,7 +1354,7 @@ void process_domotix(void)
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
-	if (g_garage_gauche.curr != g_garage_gauche.old)
+	if ((g_garage_gauche.curr != g_garage_gauche.old) || (g_init))
 	{
 	    g_garage_gauche.old = g_garage_gauche.curr;
 
@@ -1362,7 +1367,7 @@ void process_domotix(void)
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
-	if (g_garage_fenetre.curr != g_garage_fenetre.old)
+	if ((g_garage_fenetre.curr != g_garage_fenetre.old) || (g_init))
 	{
 	    g_garage_fenetre.old = g_garage_fenetre.curr;
 
@@ -1375,7 +1380,7 @@ void process_domotix(void)
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
-	if (g_cellier_porte_ext.curr != g_cellier_porte_ext.old)
+	if ((g_cellier_porte_ext.curr != g_cellier_porte_ext.old) || (g_init))
 	{
 	    g_cellier_porte_ext.old = g_cellier_porte_ext.curr;
 
@@ -1388,7 +1393,7 @@ void process_domotix(void)
 	}
 
 	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
-	if (g_cellier_porte.curr != g_cellier_porte.old)
+	if ((g_cellier_porte.curr != g_cellier_porte.old) || (g_init))
 	{
 	    g_cellier_porte.old = g_cellier_porte.curr;
 
@@ -1401,7 +1406,7 @@ void process_domotix(void)
 	}
 
 	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
-	if (g_lingerie_porte_cuisine.curr != g_lingerie_porte_cuisine.old)
+	if ((g_lingerie_porte_cuisine.curr != g_lingerie_porte_cuisine.old) || (g_init))
 	{
 	    g_lingerie_porte_cuisine.old = g_lingerie_porte_cuisine.curr;
 
@@ -1414,7 +1419,7 @@ void process_domotix(void)
 	}
 
 	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
-	if (g_garage_porte.curr != g_garage_porte.old)
+	if ((g_garage_porte.curr != g_garage_porte.old) || (g_init))
 	{
 	    g_garage_porte.old = g_garage_porte.curr;
 
@@ -1427,7 +1432,7 @@ void process_domotix(void)
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
-	if (g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old)
+	if ((g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old) || (g_init))
 	{
 	    g_cuisine_porte_ext.old = g_cuisine_porte_ext.curr;
 
@@ -1440,7 +1445,7 @@ void process_domotix(void)
 	}
 
 	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
-	if (g_lingerie_fenetre.curr != g_lingerie_fenetre.old)
+	if ((g_lingerie_fenetre.curr != g_lingerie_fenetre.old) || (g_init))
 	{
 	    g_lingerie_fenetre.old = g_lingerie_fenetre.curr;
 
@@ -1478,7 +1483,7 @@ void process_domotix(void)
 		g_garage_lumiere_etabli.state_curr = 1;
 	    }
 
-	    if (g_garage_lumiere_etabli.state_curr != g_garage_lumiere_etabli.state_old)
+	    if ((g_garage_lumiere_etabli.state_curr != g_garage_lumiere_etabli.state_old)  || (g_init))
 	    {
 		g_garage_lumiere_etabli.state_old = g_garage_lumiere_etabli.state_curr;
 
@@ -1506,7 +1511,7 @@ void process_domotix(void)
 		g_cellier_lumiere.state_curr = 1;
 	    }
 
-	    if (g_cellier_lumiere.state_curr != g_cellier_lumiere.state_old)
+	    if ((g_cellier_lumiere.state_curr != g_cellier_lumiere.state_old) || (g_init))
 	    {
 		g_cellier_lumiere.state_old = g_cellier_lumiere.state_curr;
 
@@ -1523,7 +1528,7 @@ void process_domotix(void)
 	g_temperature_ext.curr = (500.0 * value) / 1024;
 
 	if ((g_temperature_ext.curr > (g_temperature_ext.old + 1)) ||
-	    ((g_temperature_ext.curr + 1) < g_temperature_ext.old))
+	    ((g_temperature_ext.curr + 1) < g_temperature_ext.old) || (g_init))
 	{
 	    g_temperature_ext.old = g_temperature_ext.curr;
 
@@ -1547,7 +1552,7 @@ void process_domotix(void)
 		g_garage_lumiere.state_curr = 1;
 	    }
 
-	    if (g_garage_lumiere.state_curr != g_garage_lumiere.state_old)
+	    if ((g_garage_lumiere.state_curr != g_garage_lumiere.state_old) || (g_init))
 	    {
 		g_garage_lumiere.state_old = g_garage_lumiere.state_curr;
 
@@ -1575,7 +1580,7 @@ void process_domotix(void)
 		g_lingerie_lumiere.state_curr = 1;
 	    }
 
-	    if (g_lingerie_lumiere.state_curr != g_lingerie_lumiere.state_old)
+	    if ((g_lingerie_lumiere.state_curr != g_lingerie_lumiere.state_old) || (g_init))
 	    {
 		g_lingerie_lumiere.state_old = g_lingerie_lumiere.state_curr;
 
@@ -1587,6 +1592,9 @@ void process_domotix(void)
 	    PgmPrint("Lingerie lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
 	}
+
+	/* reset state of init */
+	g_init = 0;
     }
 }
 
