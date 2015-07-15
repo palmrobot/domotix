@@ -1491,7 +1491,7 @@ void process_domotix(void)
 	 */
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
-	if ((g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere_etabli.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere_etabli.old))
 	{
 	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
@@ -1519,7 +1519,7 @@ void process_domotix(void)
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
-	if ((g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old))
 	{
 	    g_cellier_lumiere.old = g_cellier_lumiere.curr;
@@ -1560,7 +1560,7 @@ void process_domotix(void)
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
-	if ((g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old))
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
@@ -1588,7 +1588,7 @@ void process_domotix(void)
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
-	if ((g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_lingerie_lumiere.curr + THRESHOLD_CMP_OLD) < g_lingerie_lumiere.old))
 	{
 	    g_lingerie_lumiere.old = g_lingerie_lumiere.curr;
