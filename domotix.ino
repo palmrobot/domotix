@@ -30,8 +30,9 @@
 #define PIN_GARAGE_FOND			2 /* H */
 #define PIN_CUISINE_EXT			12 /* L */
 #define PIN_LINGERIE_FENETRE		11 /* N */
+#define PIN_ENTREE_PORTE_EXT		13 /* O */
+
 #define PIN_				10
-#define PIN_				13
 
 #define PIN_OUT_LIGHT_1			40
 
@@ -42,7 +43,6 @@
 #define PIN_ETHER_CTRL2			51
 #define PIN_ETHER_CTRL3			52
 #define PIN_ETHER_SELECT		53
-
 
 
 /********************************************************/
@@ -212,6 +212,7 @@ state_porte_s g_lingerie_porte_cuisine; /* K */
 state_porte_s g_cuisine_porte_ext; /* L */
 state_lumiere_s g_temperature_ext; /* M */
 state_porte_s g_lingerie_fenetre; /* N */
+state_porte_s g_entree_porte_ext; /* O */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	70
@@ -274,6 +275,7 @@ void setup(void)
     pinMode(PIN_GARAGE_FOND, INPUT);
     pinMode(PIN_CUISINE_EXT, INPUT);
     pinMode(PIN_LINGERIE_FENETRE, INPUT);
+    pinMode(PIN_ENTREE_PORTE_EXT, INPUT);
 
     pinMode(PIN_SS_ETH_CONTROLLER, OUTPUT);
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
@@ -338,6 +340,7 @@ void setup(void)
     g_lingerie_lumiere.state_curr = 0;
     g_lingerie_porte_cuisine.old = 0;
     g_lingerie_fenetre.old = 0;
+    g_entree_porte_ext.old = 0;
 
     g_cuisine_porte_ext.old = 0;
     g_temperature_ext.old = 0;
@@ -644,6 +647,11 @@ void deal_with_code(char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_lingerie_fenetre.curr],
 		strlen(ptr_code->name[g_lingerie_fenetre.curr]));
+	}break;
+	case 'O':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_entree_porte_ext.curr],
+		strlen(ptr_code->name[g_entree_porte_ext.curr]));
 	}break;
 	default:
 
@@ -1578,6 +1586,19 @@ void process_domotix(void)
 	    delay = 1;
 	}
 
+	g_entree_porte_ext.curr = digitalRead(PIN_ENTREE_PORTE_EXT);
+	if ((g_entree_porte_ext.curr != g_entree_porte_ext.old) || (g_init))
+	{
+	    g_entree_porte_ext.old = g_entree_porte_ext.curr;
+
+	    /* write in file  */
+	    save_entry("O.txt", g_entree_porte_ext.curr, TYPE_PORTE);
+
+#ifdef DEBUG_SENSOR
+	    PgmPrint("Entree Porte Ext:");Serial.println(g_entree_porte_ext.curr);
+#endif
+	}
+
 
 	/* ================================
 	 *
@@ -1590,7 +1611,7 @@ void process_domotix(void)
 	 */
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
-	if ((g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere_etabli.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere_etabli.old))
 	{
 	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
@@ -1619,7 +1640,7 @@ void process_domotix(void)
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
-	if ((g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old))
 	{
 	    g_cellier_lumiere.old = g_cellier_lumiere.curr;
@@ -1662,7 +1683,7 @@ void process_domotix(void)
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
-	if ((g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old))
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
@@ -1691,7 +1712,7 @@ void process_domotix(void)
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
-	if ((g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	if ( (g_init) || (g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_lingerie_lumiere.curr + THRESHOLD_CMP_OLD) < g_lingerie_lumiere.old))
 	{
 	    g_lingerie_lumiere.old = g_lingerie_lumiere.curr;
