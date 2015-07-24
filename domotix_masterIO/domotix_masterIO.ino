@@ -36,6 +36,8 @@
 
 #define PIN_OUT_LIGHT_1			40
 
+#define PIN_SS_ETH_CONTROLLER 		50
+
 
 /* Reserverd Pins */
 #define CS_PIN_SDCARD			4
@@ -1451,13 +1453,13 @@ void save_entry_temp(const char *file, int value)
 
 void process_domotix(void)
 {
-    char delay;
+    char wait_a_moment;
 
     /* save current date and clock in global var */
     digitalClock();
     digitalDate();
 
-    delay = 0;
+    wait_a_moment = 0;
     if (g_process_domotix != PROCESS_DOMOTIX_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
@@ -1471,7 +1473,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
@@ -1485,7 +1487,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
@@ -1499,7 +1501,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
@@ -1513,7 +1515,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
@@ -1527,7 +1529,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte lingerie :");Serial.println(g_cellier_porte.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
@@ -1541,7 +1543,7 @@ void process_domotix(void)
 #ifdef DEBUG
 	    PgmPrint("Lingerie porte cuisine :");Serial.println(g_lingerie_porte_cuisine.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
@@ -1555,7 +1557,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fond :");Serial.println(g_garage_porte.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
@@ -1569,7 +1571,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
@@ -1583,7 +1585,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_entree_porte_ext.curr = digitalRead(PIN_ENTREE_PORTE_EXT);
@@ -1636,7 +1638,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
@@ -1665,7 +1667,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_lumiere.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	int value = analogRead(PIN_TEMP_EXT);
@@ -1679,7 +1681,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Temperature Ext:");Serial.println(g_temperature_ext.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
@@ -1708,7 +1710,7 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
@@ -1737,10 +1739,10 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie lumiere :");Serial.println(g_lingerie_lumiere.curr);
 #endif
-	    delay = 1;
+	    wait_a_moment = 1;
 	}
 
-	if (delay)
+	if (wait_a_moment)
 	{
 	    /* wait some time, before testing the next time the inputs */
 	    delay(500);
