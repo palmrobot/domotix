@@ -1,6 +1,6 @@
 #include <WaveHC.h>
 #include <WaveUtil.h>
-
+#include <GSM.h>
 
 /********************************************************/
 /*      State  definitions                              */
@@ -20,10 +20,36 @@ Master Board                   GSM Board
 */
 
 /********************************************************/
+/*      Key  definitions                                */
+/********************************************************/
+/* 1) "xxxxx Domotix"  => "Bonjour Name"
+ *
+ * 2) "
+ */
+
+/********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
 
 
+
+/********************************************************/
+/*      GSM  definitions                                */
+/********************************************************/
+/* PIN Number for the SIM */
+#define PIN_CODE				"2153"
+#define PHONE_NUMBER				""
+#define NICO_NUMBER				"+33668089948"
+#define ESTELLE_NUMBER				"+33668088058"
+
+/* initialize the library instances */
+GSM	g_gsm_access;
+GSM_SMS g_gsm_sms;
+
+/* Array to hold the number a SMS is retreived from */
+#define PHONE_NUMBER_LEN			20
+char    g_sender_number[PHONE_NUMBER_LEN];
+char    g_sms_buffer[150];
 
 /********************************************************/
 /*      Serial GSM  definitions                         */
@@ -164,22 +190,75 @@ void process_recv_command(void)
 
 void process_recv_gsm_sms(void)
 {
+    uint8_t i;
+
     if (g_process_recv_gsm_sms)
     {
 	/* check if a message has been received */
+	if (g_gsm_sms.available())
+	{
+	    /* Get remote number */
+	    g_gsm_sms.remoteNumber(g_sender_number, PHONE_NUMBER_LEN);
 
+	    /* Read message bytes and print them */
+	    i = 0;
+	    do
+	    {
+		g_sms_buffer[i] = sms.read();
+		i++;
+	    }
+	    while (g_sms_buffer[i-1] != 0);
 
+	    /* Delete message from modem memory */
+	    g_gsm_sms.flush();
+
+	    /* Check sender */
+	    if (strstr(g_sender_number,"+33668089948") != NULL)
+	    {
+		
+		
+
+	    }
+	    else if (strstr(g_sender_number,"+33668088058") != NULL)
+	    {
+
+	    }
+	    else
+	    {
+		/* Discard */
+		/* send acces denied  message */
+		g_gsm_sms.beginSMS(g_sender_number);
+		sprintf(g_sms_buffer,"! Acces Denied !");
+		g_gsm_sms.print(g_sms_buffer);
+		g_gsm_sms.endSMS();
+		delay(500);
+	    }
+	}
     }
 }
 
 void process_action(void)
 {
+    boolean not_connected;
+
     if (g_process_action)
     {
 	if (g_process_action == PROCESS_ACTION_INIT)
 	{
 	    /* init GSM */
-
+	    /* Start GSM connection */
+	    not_connected = true;
+	    while(not_connected)
+	    {
+		if(g_gsm_access.begin(PIN_CODE) == GSM_READY)
+		{
+		    not_connected = false;
+		}
+		else
+		{
+		    delay(500);
+		}
+	    }
 
 	    /* Then send OK is ready */
 	    g_send_to_mother[0] = COMMAND_SEND_INIT_OK;
