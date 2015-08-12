@@ -47,39 +47,79 @@
 #define PIN_ETHER_SELECT		53
 
 
+
 /********************************************************/
-/*      Serial GSM definitions                        */
+/*      State  GSM definitions                          */
 /********************************************************/
 
-#define GSM_SEND_COMMAND_STOP			0x01 /* [0x01 Stop] */
-#define GSM_SEND_COMMAND_FORWARD		0x02 /* [0x02 Forward] [Speed] [distance in cm] */
-#define GSM_SEND_COMMAND_BACKWARD		0x03 /* [0x03 Backward] [Speed] [distance in cm] */
-#define GSM_SEND_COMMAND_ROTATE_LEFT		0x04 /* [0x04 Rotate Left] [Speed] [degrees]   */
-#define GSM_SEND_COMMAND_ROTATE_RIGHT		0x05 /* [0x05 Rotate Right] [Speed] [degrees]  */
-#define GSM_SEND_COMMAND_TEST			0x06 /* [0x06 Test] [Nb of writes] [write 1] [write 2] ... [write n] */
-#define GSM_SEND_COMMAND_COUNTERS_CM		0x07 /* [0x07 Get counters in centimeters] */
-#define GSM_SEND_COMMAND_COUNTERS		0x08 /* [0x08 Get counters] */
-#define GSM_SEND_COMMAND_COUNTERS_DEG		0x09 /* [0x09 Get counters in degrees] */
-#define GSM_SEND_COMMAND_DETECTION		0x0A /* [0x0A Get Detection */
 
-#define GSM_SEND_COMMAND_START			0xFE /* [0xFE Start transmission] */
+#define COMMAND_START			0xFA
+#define COMMAND_REPLY			0xFB
 
-#define CMD_DATA_MAX				6
-uint8_t g_send_gsm[CMD_DATA_MAX];
+/*
+Master I/O Board                     GSM Board
+    |                                    |
+    |                                    |
+    |--START CMD NB_DATA DATA CRC------->|
+    |<----------ACK CRC------------------|
+    |                                    |
+    |-- FA 82 00 00 -------------------->| Ask for init GSM module
+    |<--------- FB 00--------------------| Ack with CRC from sent data
+    |                                    |
+    |-- FA 83 XX "message to send" YY -> | Message to send by SMS
+    |<--------- FB YY--------------------| Ack with CRC from sent data
+    |                                    |
+*/
+
+#define IO_GSM_COMMAND_INIT			0x82
+#define IO_GSM_COMMAND_SMS			0x83
+
+
+/*
+Master I/O Board                     GSM Board
+    |                                    |
+    |                                    |
+    |--START CMD NB_DATA DATA CRC------->|
+    |<----------ACK CRC------------------|
+    |                                    |
+    |<--FA D1 00 CC ---------------------| Init GSM module OK
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D2 00 CC ---------------------| Init GSM module FAILED
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D3 01 XX CC ------------------| Switch ON/OFF light 1
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D4 01 XX CC ------------------| Critical time enable/disable
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+
+*/
+
+#define GSM_IO_COMMAND_INIT_OK			0xD1
+#define GSM_IO_COMMAND_INIT_FAILED		0xD2
+#define GSM_IO_COMMAND_LIGHT_1			0xD3
+#define GSM_IO_COMMAND_CRITICAL_TIME		0xD4
+
+
+#define CMD_DATA_MAX				60
+
 uint8_t g_recv_gsm[CMD_DATA_MAX];
-uint8_t g_recv_gsm_nb;
+uint8_t g_gsm_command = 0;
 
 /********************************************************/
 /*      Process definitions                             */
 /********************************************************/
+#ifdef DEBUG
 uint8_t g_process_serial;
 #define PROCESS_SERIAL_OFF			0
 #define PROCESS_SERIAL_ON			1
+#endif
 
 uint8_t g_process_ethernet;
 #define PROCESS_ETHERNET_OFF			0
 #define PROCESS_ETHERNET_ON			1
-
 
 uint8_t g_process_domotix;
 #define PROCESS_DOMOTIX_OFF			0
@@ -95,22 +135,64 @@ uint8_t g_process_schedule;
 
 uint8_t g_process_action;
 #define PROCESS_ACTION_NONE			0
-#define PROCESS_ACTION_SWITCH_ON_LIGHT_1	1
-#define PROCESS_ACTION_SWITCH_OFF_LIGHT_1	2
+#define PROCESS_ACTION_GSM_INIT_OK		GSM_IO_COMMAND_INIT_OK
+#define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
+#define PROCESS_ACTION_LIGHT_1			GSM_IO_COMMAND_LIGHT_1
+#define PROCESS_ACTION_CRITICAL_TIME		GSM_IO_COMMAND_CRITICAL_TIME
 
 uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_DO_NOTHING		0
 #define PROCESS_RECV_GSM_WAIT_COMMAND		1
 
-uint8_t g_process_send_gsm;
-#define PROCESS_GSM_START			0xFE /* Start transmission */
+/********************************************************/
+/*      Global definitions                              */
+/********************************************************/
 
 
+typedef struct state_porte_s
+{
+    uint8_t old;
+    uint8_t curr;
+};
 
+typedef struct state_lumiere_s
+{
+    int old;
+    int curr;
+    int state_old;
+    int state_curr;
+};
+
+state_porte_s g_garage_droite; /* A */
+state_porte_s g_garage_gauche; /* B */
+state_porte_s g_garage_fenetre; /* C */
+state_lumiere_s g_garage_lumiere_etabli; /* D */
+state_porte_s g_cellier_porte_ext; /* E */
+state_porte_s g_cellier_porte; /* F */
+state_lumiere_s g_cellier_lumiere; /* G */
+state_porte_s g_garage_porte; /* H */
+state_lumiere_s g_garage_lumiere; /* I */
+state_lumiere_s g_lingerie_lumiere; /* J */
+state_porte_s g_lingerie_porte_cuisine; /* K */
+state_porte_s g_cuisine_porte_ext; /* L */
+state_lumiere_s g_temperature_ext; /* M */
+state_porte_s g_lingerie_fenetre; /* N */
+state_porte_s g_entree_porte_ext; /* O */
+
+#define THRESHOLD_CMP_OLD	10
+#define THRESHOLD_LIGHT_ON	220
+
+uint16_t g_req_count = 0;
+uint8_t g_debug      = 0;
+uint8_t g_critical_time = 0;
 
 
 /********************************************************/
-/*      Global definitions                              */
+/*      GSM global definitions                          */
+/********************************************************/
+
+/********************************************************/
+/*      Ethernet global definitions                     */
 /********************************************************/
 uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x00, 0xFF, 0x86};
 uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
@@ -130,6 +212,13 @@ char g_full_list_name[13];
 char g_code_html[SIZE_CODE_HTML];
 
 #define MAX_FILE_SIZE			4000 /* 4Ko */
+
+#define FILE_MAX_LEN			13
+typedef struct file_web_t
+{
+    File  fd;
+    char name[FILE_MAX_LEN + 1];
+};
 
 typedef struct
 {
@@ -179,59 +268,16 @@ data_item_t g_data_item[NB_ITEM];
 EthernetServer g_server(9090);
 EthernetClient g_client;
 
-typedef struct state_porte_s
-{
-    uint8_t old;
-    uint8_t curr;
-};
-
-typedef struct state_lumiere_s
-{
-    int old;
-    int curr;
-    int state_old;
-    int state_curr;
-};
-
-#define FILE_MAX_LEN			13
-typedef struct file_web_t
-{
-    File  fd;
-    char name[FILE_MAX_LEN + 1];
-};
-
-state_porte_s g_garage_droite; /* A */
-state_porte_s g_garage_gauche; /* B */
-state_porte_s g_garage_fenetre; /* C */
-state_lumiere_s g_garage_lumiere_etabli; /* D */
-state_porte_s g_cellier_porte_ext; /* E */
-state_porte_s g_cellier_porte; /* F */
-state_lumiere_s g_cellier_lumiere; /* G */
-state_porte_s g_garage_porte; /* H */
-state_lumiere_s g_garage_lumiere; /* I */
-state_lumiere_s g_lingerie_lumiere; /* J */
-state_porte_s g_lingerie_porte_cuisine; /* K */
-state_porte_s g_cuisine_porte_ext; /* L */
-state_lumiere_s g_temperature_ext; /* M */
-state_porte_s g_lingerie_fenetre; /* N */
-state_porte_s g_entree_porte_ext; /* O */
-
-#define THRESHOLD_CMP_OLD	10
-#define THRESHOLD_LIGHT_ON	70
-
 #define WEB_GET			1
 #define WEB_EOL			2
 #define WEB_END			4
 #define WEB_ERROR		16
 
 uint8_t g_page_web   = 0;
-uint16_t g_req_count = 0;
 time_t g_prevDisplay = 0;
 file_web_t g_filename;
-uint8_t g_debug = 0;
 char  g_clock[9];
 char  g_date[9];
-uint8_t g_NTP = 0;
 uint8_t g_sched_temperature = 0;
 uint8_t g_init = 0;
 
@@ -252,6 +298,7 @@ time_t prevDisplay = 0;
 
 /*  NTP time is in the first 48 bytes of message*/
 byte g_packetBuffer[NTP_PACKET_SIZE];
+uint8_t g_NTP = 0;
 
 
 /********************************************************/
@@ -267,7 +314,7 @@ void setup(void)
 {
     uint8_t i;
 
-    /* Init Port In/Out */
+    /* Init Input Ports */
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
     pinMode(PIN_GARAGE_FENETRE, INPUT);
@@ -279,11 +326,14 @@ void setup(void)
     pinMode(PIN_LINGERIE_FENETRE, INPUT);
     pinMode(PIN_ENTREE_PORTE_EXT, INPUT);
 
-    pinMode(PIN_SS_ETH_CONTROLLER, OUTPUT);
+    /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
 
     /* init Process */
+#ifdef DEBUG
     g_process_serial   = PROCESS_SERIAL_ON;
+#endif
+
     g_process_ethernet = PROCESS_ETHERNET_ON;
     g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
@@ -294,10 +344,12 @@ void setup(void)
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
     Serial.begin(115200);
+    dealy(100);
 #endif
 
     /* initialize the serial communications with GSM Board */
     Serial1.begin(115200);
+    delay(100);
 
     /* start the Ethernet connection and the server: */
     Ethernet.begin(g_mac_addr, g_ip_addr);
@@ -345,6 +397,7 @@ void setup(void)
     g_entree_porte_ext.old = 0;
 
     g_cuisine_porte_ext.old = 0;
+
     g_temperature_ext.old = 0;
 
     g_sched_temperature = 0;
@@ -402,30 +455,45 @@ void ClientPrintln_P(PGM_P str)
   g_client.println();
 }
 
-/* Mother -> Gsm */
-/*  Start ->       */
-/*  Cmd   ->       */
-/*  Data1 ->       */
-/*  Data2 ->       */
-/*  Data3 ->       */
-/*  Data4 ->       */
-void send_gsm(uint8_t *buffer, int len)
-{
-    uint8_t padding[CMD_DATA_MAX] = {0,0,0,0,0,0};
 
-    if (len > CMD_DATA_MAX)
-	len = CMD_DATA_MAX;
+
+void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
+{
+    if (size > CMD_DATA_MAX)
+	size = CMD_DATA_MAX;
 
     /* Send Start of transmission */
-    Serial1.write(GSM_SEND_COMMAND_START);
+    Serial1.write(COMMAND_START);
 
-    /* Write Command + Data */
-    Serial1.write(buffer, len);
+    /* Send Command  */
+    Serial1.write(cmd);
 
-    /* Write padding Data */
-    Serial1.write(padding, CMD_DATA_MAX - len);
+    /* Send Size of data */
+    Serial1.write(size);
+
+    /* Write Data */
+    Serial1.write(buffer, size);
 }
 
+void send_SMS_P(PGM_P str)
+{
+    uint8_t message[CMD_DATA_MAX + 1];
+    uint8_t i;
+
+    i = 0;
+    message[0] = (uint8_t)pgm_read_byte(str);
+
+    while ((i < CMD_DATA_MAX) && (message[i] != 0))
+    {
+	i++;
+	message[i] = (uint8_t)pgm_read_byte(str);
+    }
+
+    if ((i > 0) && (g_critical_time))
+    {
+	send_gsm(IO_GSM_COMMAND_SMS, message, strlen((const char*)message) - 1);
+    }
+}
 
 /********************************************************/
 /*      Web                                             */
@@ -921,37 +989,65 @@ void process_serial(void)
 }
 #endif
 
+
 void process_recv_gsm(void)
 {
     uint8_t value;
+    uint8_t size;
+    uint8_t i;
+    uint8_t crc;
+    uint8_t recv_crc;
 
-    if (g_process_recv_gsm)
+    if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
 	/* if we get a valid char, read char */
 	if (Serial1.available() > 0)
 	{
 	    /* get Start Byte */
 	    value = Serial1.read();
-	    if (value == PROCESS_GSM_START)
+	    if (value == COMMAND_START)
 	    {
-		/* Wait for serial */
-		while (Serial1.available() < CMD_DATA_MAX);
+		/* Read Command */
+		while (Serial1.available() == 0);
+		g_gsm_command = Serial1.read();
 
-		for(g_recv_gsm_nb = 0; g_recv_gsm_nb < CMD_DATA_MAX; g_recv_gsm_nb++)
+		/* Read Size of Data */
+		while (Serial1.available() == 0);
+		size = Serial1.read();
+
+		/* Wait for all data */
+		while (Serial1.available() < size);
+
+		crc = 0;
+		for(i = 0; i < size; i++)
 		{
 		    /* get incoming write: */
-		    g_recv_gsm[g_recv_gsm_nb] = Serial1.read();
+		    g_recv_gsm[i] = Serial1.read();
+		    crc += g_recv_gsm[i];
 		}
+
+		/* Read CRC of Data */
+		while (Serial1.available() == 0);
+		recv_crc = Serial1.read();
+
+		/* check CRC */
+		if (recv_crc != crc)
+		{
+		    /* wrong command
+		     * Discard it
+		     */
+		    g_gsm_command = 0;
+		}
+
 		/* Set action plan */
-		g_process_action = g_recv_gsm[0];
+		g_process_action = g_gsm_command;
 
 		/* Disable communication ,wait for message treatment */
-		g_process_recv_gsm   = 0;
+		g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
 	    }
 	}
     }
 }
-
 
 void process_ethernet(void)
 {
@@ -1453,7 +1549,8 @@ void save_entry_temp(const char *file, int value)
 
 void process_domotix(void)
 {
-    char wait_a_moment;
+    uint8_t wait_a_moment;
+    int value;
 
     /* save current date and clock in global var */
     digitalClock();
@@ -1473,6 +1570,14 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_garage_droite.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Porte droite du garage est ouverte");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1487,6 +1592,14 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_garage_gauche.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Porte gauche du garage est ouverte");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1501,6 +1614,14 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_garage_fenetre.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Fenetre du garage est ouverte");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1515,6 +1636,14 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_cellier_porte_ext.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Porte exterieure du cellier est ouverte");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1571,6 +1700,14 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_cuisine_porte_ext.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Porte exterieure de la cuisine est ouverte");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1585,6 +1722,13 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
 #endif
+	    /* Critical part */
+	    if (g_lingerie_fenetre.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("La Fenetre de la lingerie vient de s'ouvrir");
+	    }
+
 	    wait_a_moment = 1;
 	}
 
@@ -1599,6 +1743,15 @@ void process_domotix(void)
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Entree Porte Ext:");Serial.println(g_entree_porte_ext.curr);
 #endif
+
+	    /* Critical part */
+	    if (g_entree_porte_ext.curr)
+	    {
+		/* Send SMS */
+		send_SMS_P("Porte d'entree est ouverte");
+	    }
+
+	    wait_a_moment = 1;
 	}
 
 
@@ -1670,20 +1823,6 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
-	int value = analogRead(PIN_TEMP_EXT);
-	g_temperature_ext.curr = (500.0 * value) / 1024;
-
-	if ((g_temperature_ext.curr > (g_temperature_ext.old + 1)) ||
-	    ((g_temperature_ext.curr + 1) < g_temperature_ext.old) || (g_init))
-	{
-	    g_temperature_ext.old = g_temperature_ext.curr;
-
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Temperature Ext:");Serial.println(g_temperature_ext.curr);
-#endif
-	    wait_a_moment = 1;
-	}
-
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
 	if ( (g_init) || (g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old))
@@ -1741,6 +1880,19 @@ void process_domotix(void)
 #endif
 	    wait_a_moment = 1;
 	}
+
+	/* ================================
+	 *
+	 *
+	 * Temperature
+	 *
+	 *
+	 *
+	 * =================================
+	 */
+
+	value = analogRead(PIN_TEMP_EXT);
+	g_temperature_ext.curr = (500.0 * value) / 1024;
 
 	if (wait_a_moment)
 	{
@@ -1818,17 +1970,54 @@ void process_action(void)
 {
     if (g_process_action != PROCESS_ACTION_NONE)
     {
-	if (g_process_action == PROCESS_ACTION_SWITCH_ON_LIGHT_1)
+	switch(g_process_action)
 	{
-	    digitalWrite(PIN_OUT_LIGHT_1, 1);
-	}
-	else if (g_process_action == PROCESS_ACTION_SWITCH_OFF_LIGHT_1)
-	{
-	    digitalWrite(PIN_OUT_LIGHT_1, 0);
-	}
+	    case PROCESS_ACTION_LIGHT_1:
+	    {
+		if (g_recv_gsm[0] == 1)
+		{
+		    digitalWrite(PIN_OUT_LIGHT_1, 1);
+		}
+		else
+		{
+		    digitalWrite(PIN_OUT_LIGHT_1, 0);
+		}
+	    }break;
 
+	    case PROCESS_ACTION_CRITICAL_TIME:
+	    {
+		if (g_recv_gsm[0] == 0)
+		{
+		    g_critical_time = 0;
+		}
+		else
+		{
+		    g_critical_time = 1;
+		}
+	    }
+	    break;
+
+	    /*
+	     * Cases not oftem used
+	     */
+
+	    case PROCESS_ACTION_GSM_INIT_FAILED:
+	    {
+
+	    }break;
+
+	    case PROCESS_ACTION_GSM_INIT_OK:
+	    {
+		digitalWrite(PIN_OUT_GSM_INIT, 1);
+	    }break;
+
+	    default:
+	    {
+	    }
+	    break;
+	}
 	/* Reset action, wait for next one */
-	g_process_action = 0;
+	g_process_action = PROCESS_ACTION_NONE;
     }
 }
 
