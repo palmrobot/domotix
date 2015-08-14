@@ -3,21 +3,64 @@
 #include <GSM.h>
 
 /********************************************************/
-/*      State  definitions                              */
+/*      State  GSM definitions                          */
 /********************************************************/
+
+
+#define COMMAND_START			0xFA
+#define COMMAND_REPLY			0xFB
+
 /*
-Master Board                   GSM Board
-    |                             |
-  Start                         Start
-    |                             |
-   Init                        Init GSM
-    |                             |
-  Ask for ready ? INIT----------->
-    |                             |
-  Recv Ready <--------- INIT_OK Ready
-    |                             |
-  Ready to send message           |
+Master I/O Board                     GSM Board
+    |                                    |
+    |                                    |
+    |--START CMD NB_DATA DATA CRC------->|
+    |<----------ACK CRC------------------|
+    |                                    |
+    |-- FA 82 00 00 -------------------->| Ask for init GSM module
+    |<--------- FB 00--------------------| Ack with CRC from sent data
+    |                                    |
+    |-- FA 83 XX "message to send" YY -> | Message to send by SMS
+    |<--------- FB YY--------------------| Ack with CRC from sent data
+    |                                    |
 */
+
+#define IO_GSM_COMMAND_INIT			0x82
+#define IO_GSM_COMMAND_SMS			0x83
+
+
+/*
+Master I/O Board                     GSM Board
+    |                                    |
+    |                                    |
+    |--START CMD NB_DATA DATA CRC------->|
+    |<----------ACK CRC------------------|
+    |                                    |
+    |<--FA D1 00 CC ---------------------| Init GSM module OK
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D2 00 CC ---------------------| Init GSM module FAILED
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D3 01 XX CC ------------------| Switch ON/OFF light 1
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+    |<--FA D4 01 XX CC ------------------| Critical time enable/disable
+    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |                                    |
+
+*/
+
+#define GSM_IO_COMMAND_INIT_OK			0xD1
+#define GSM_IO_COMMAND_INIT_FAILED		0xD2
+#define GSM_IO_COMMAND_LIGHT_1			0xD3
+#define GSM_IO_COMMAND_CRITICAL_TIME		0xD4
+
+
+#define CMD_DATA_MAX				60
+
+uint8_t g_recv_masterIO[CMD_DATA_MAX];
+uint8_t g_gsm_command = 0;
 
 /********************************************************/
 /*      Key  definitions                                */
@@ -37,7 +80,7 @@ Master Board                   GSM Board
 /*      GSM  definitions                                */
 /********************************************************/
 /* PIN Number for the SIM */
-#define PIN_CODE				"2153"
+#define PIN_SIM_CODE				"2153"
 #define PHONE_NUMBER				""
 #define NICO_NUMBER				"+33668089948"
 #define ESTELLE_NUMBER				"+33668088058"
@@ -51,53 +94,31 @@ GSM_SMS g_gsm_sms;
 char    g_sender_number[PHONE_NUMBER_LEN];
 char    g_sms_buffer[150];
 
-/********************************************************/
-/*      Serial GSM  definitions                         */
-/********************************************************/
-
-#define CMD_DATA_MAX			6
-uint8_t g_recv_from_mother[CMD_DATA_MAX];
-
-#define COMMAND_RECV_START			0xFE /* [0xFE Start transmission] */
-
-#define COMMAND_RECV_TEST			0x80 /* [0x80 Test] [Nb of bytes] [byte 1] [byte 2] ... [byte n] */
-#define COMMAND_RECV_TEST2			0x81 /* [0x81 Test2] [data1] [data2] */
-#define COMMAND_RECV_INIT			0x82 /* [0x82 Init] */
-#define COMMAND_RECV_SMS1			0x83 /* [0x83 SMS1] */
-#define COMMAND_RECV_SMS2			0x84 /* [0x84 SMS2] */
-
-
-uint8_t g_send_to_mother[CMD_DATA_MAX];
-
-#define COMMAND_SEND_START			0xFE /* [0xFE Start transmission */
-#define COMMAND_SEND_INIT_OK			0xD1 /* [0xD1 Init OK] */
-#define COMMAND_SEND_INIT_FAILED		0xD2 /* [0xD2 Init Failed ] */
-#define COMMAND_SEND_ACTION_SMS1		0xD3 /* [0xD3 SMS For Action 1 ] */
-#define COMMAND_SEND_ACTION_SMS2		0xD4 /* [0xD4 SMS For Action 2 ] */
-
 
 /********************************************************/
 /*      Process definitions                             */
 /********************************************************/
 
 
-#define PROCESS_RECEIVE_WAIT_COMMAND		1
-uint8_t g_process_recv_command;
+uint8_t g_process_recv_masterIO;
+#define PROCESS_RECV_MASTERIO_DO_NOTHING		0
+#define PROCESS_RECV_MASTERIO_WAIT_COMMAND		1
 
-#define PROCESS_ACTION_INIT			COMMAND_RECV_INIT
-#define PROCESS_ACTION_SMS1			COMMAND_RECV_SMS1
-#define PROCESS_ACTION_SMS2			COMMAND_RECV_SMS2
 uint8_t g_process_action;
+#define PROCESS_ACTION_NONE				0
+#define PROCESS_ACTION_INIT				IO_GSM_COMMAND_INIT
+#define PROCESS_ACTION_SMS				IO_GSM_COMMAND_SMS
 
-
-uint8_t g_process_recv_gsm_sms;
+uint8_t g_process_recv_sms;
+#define PROCESS_RECV_SMS_DO_NOTHING			0
+#define PROCESS_RECV_SMS_WAIT_SMS			1
 
 /********************************************************/
 /*      Global definitions                              */
 /********************************************************/
 
-#define GSM_INIT_FAILED				0
-#define GSM_INIT_OK				1
+#define GSM_INIT_FAILED					0
+#define GSM_INIT_OK					1
 uint8_t g_gsm_init;
 
 
@@ -107,92 +128,26 @@ void setup()
 
 
     /* init process states */
-    g_process_receive		= PROCESS_RECEIVE_WAIT_COMMAND;
-    g_process_recv_command	= 0;
-    g_process_action		= PROCESS_ACTION_INIT;
-    g_process_recv_gsm_sms	= 0;
+    g_process_recv_masterIO	= PROCESS_RECV_MASTERIO_WAIT_COMMAND;
+    g_process_action		= PROCESS_ACTION_NONE;
+    g_process_recv_sms		= PROCESS_RECV_SMS_DO_NOTHING;
 
     /* Init global variables */
     g_gsm_init			 = GSM_INIT_FAILED;
 
     /* init pipes */
-    g_recv_mother[0]	= 0;
-    g_recv_mother_nb	= 0;
-
-    g_send_mother[0]	= 0;
+    g_recv_masterIO[0]	= 0;
 
     /* initialize serial communications at 115200 bps: */
     Serial.begin(115200);
-
     delay(100);
 }
-
-/*  GSM   -> Ethernet */
-/*  Start ->       */
-/*  Cmd   ->       */
-/*  Data1 ->       */
-/*  Data2 ->       */
-/*  Data3 ->       */
-/*  Data4 ->       */
-void send_mother(uint8_t *buffer, int len)
-{
-    uint8_t padding[CMD_SEND_DATA_MAX] = {0};
-
-    if (len > CMD_SEND_DATA_MAX)
-	len = CMD_SEND_DATA_MAX;
-
-    /* Send Start of transmission */
-    Serial.write(COMMAND_SEND_START);
-
-    /* Write Command + Data */
-    Serial.write(buffer, len);
-
-    /* Write padding Data */
-    Serial.write(padding, CMD_SEND_DATA_MAX - len);
-}
-
-
-/********************************************************/
-/*      Process Functions                               */
-/********************************************************/
-void process_recv_command(void)
-{
-    uint8_t value;
-
-    if (g_process_recv_command == PROCESS_RECEIVE_WAIT_COMMAND)
-    {
-	/* if we get a valid char, read char */
-	if (Serial.available() > 0)
-	{
-	    /* get Start Byte */
-	    value = Serial.read();
-	    if (value == COMMAND_RECV_START)
-	    {
-		/* Wait for serial */
-		while (Serial.available() < CMD_RECV_DATA_MAX);
-
-		for(g_recv_mother_nb = 0; g_recv_mother_nb < CMD_RECV_DATA_MAX; g_recv_mother_nb++)
-		{
-		    /* get incoming write: */
-		    g_recv_from_mother[g_recv_from_mother_nb] = Serial.read();
-		}
-
-		/* Set action plan */
-		g_process_action = g_recv_from_mother[0];
-
-		/* Disable communication ,wait for message treatment */
-		g_process_recv_command  = 0;
-	    }
-	}
-    }
-}
-
 
 void process_recv_gsm_sms(void)
 {
     uint8_t i;
 
-    if (g_process_recv_gsm_sms)
+    if (g_process_recv_sms)
     {
 	/* check if a message has been received */
 	if (g_gsm_sms.available())
@@ -213,13 +168,11 @@ void process_recv_gsm_sms(void)
 	    g_gsm_sms.flush();
 
 	    /* Check sender */
-	    if (strstr(g_sender_number,"+33668089948") != NULL)
+	    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
 	    {
-		
-		
 
 	    }
-	    else if (strstr(g_sender_number,"+33668088058") != NULL)
+	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
 	    {
 
 	    }
@@ -248,9 +201,10 @@ void process_action(void)
 	    /* init GSM */
 	    /* Start GSM connection */
 	    not_connected = true;
+
 	    while(not_connected)
 	    {
-		if(g_gsm_access.begin(PIN_CODE) == GSM_READY)
+		if(g_gsm_access.begin(PIN_SIM_CODE) == GSM_READY)
 		{
 		    not_connected = false;
 		}
@@ -261,29 +215,25 @@ void process_action(void)
 	    }
 
 	    /* Then send OK is ready */
-	    g_send_to_mother[0] = COMMAND_SEND_INIT_OK;
-	    send_mother(g_send_to_mother, 1);
+	    g_send_to_masterIO[0] = GSM_IO_COMMAND_INIT_OK;
+	    send_masterIO(g_send_to_masterIO, 1);
 
 	    g_gsm_init = GSM_INIT_OK;
 
 	    /* start polling sms */
-	    g_process_recv_gsm_sms = 1;
+	    g_process_recv_sms = PROCESS_RECV_SMS_WAIT_SMS;
 
 	    /* restart waiting for command */
-	    g_process_recv_command == PROCESS_RECEIVE_WAIT_COMMAND;
+	    g_process_recv_masterIO == PROCESS_RECV_MASTERIO_WAIT_COMMAND;
 
 	}
-	else if (g_process_action == PROCESS_ACTION_SMS1)
-	{
-
-	}
-	else if (g_process_action == PROCESS_ACTION_SMS2)
+	else if (g_process_action == PROCESS_ACTION_SMS)
 	{
 
 	}
 
 	/* end of action, wait for a new one */
-	g_process_action = 0;
+	g_process_action = PROCESS_ACTION_NONE;
     }
 }
 
