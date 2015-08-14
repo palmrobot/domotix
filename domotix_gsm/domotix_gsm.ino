@@ -1,5 +1,3 @@
-#include <WaveHC.h>
-#include <WaveUtil.h>
 #include <GSM.h>
 
 /********************************************************/
@@ -60,6 +58,7 @@ Master I/O Board                     GSM Board
 #define CMD_DATA_MAX				60
 
 uint8_t g_recv_masterIO[CMD_DATA_MAX];
+uint8_t g_send_to_masterIO[CMD_DATA_MAX];
 uint8_t g_gsm_command = 0;
 
 /********************************************************/
@@ -143,6 +142,92 @@ void setup()
     delay(100);
 }
 
+
+void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
+{
+    if (size > CMD_DATA_MAX)
+	size = CMD_DATA_MAX;
+
+    /* Send Start of transmission */
+    Serial.write(COMMAND_START);
+
+    /* Send Command  */
+    Serial.write(cmd);
+
+    /* Send Size of data */
+    Serial.write(size);
+
+    /* Write Data */
+    if (buffer != NULL)
+    {
+	Serial.write(buffer, size);
+    }
+}
+
+
+void process_recv_masterIO(void)
+{
+    uint8_t value;
+    uint8_t size;
+    uint8_t i;
+    uint8_t crc;
+    uint8_t recv_crc;
+
+    if (g_process_recv_masterIO == PROCESS_RECV_MASTERIO_WAIT_COMMAND)
+    {
+	/* if we get a valid char, read char */
+	if (Serial.available() > 0)
+	{
+	    /* get Start Byte */
+	    value = Serial.read();
+	    if (value == COMMAND_START)
+	    {
+		/* Read Command */
+		while (Serial.available() == 0);
+		g_gsm_command = Serial.read();
+
+		/* Read Size of Data */
+		while (Serial.available() == 0);
+		size = Serial.read();
+
+		/* Wait for all data */
+		while (Serial.available() < size);
+
+		crc = 0;
+		for(i = 0; i < size; i++)
+		{
+		    /* get incoming data: */
+		    g_recv_masterIO[i] = Serial.read();
+		    crc += g_recv_masterIO[i];
+		}
+
+		/* Add null terminated string */
+		g_recv_masterIO[size-1] = '\0';
+
+		/* Read CRC of Data */
+		while (Serial.available() == 0);
+		recv_crc = Serial.read();
+
+		/* check CRC */
+		if (recv_crc != crc)
+		{
+		    /* wrong command
+		     * Discard it
+		     */
+		    g_gsm_command = 0;
+		}
+
+		/* Set action plan */
+		g_process_action = g_gsm_command;
+
+		/* Disable communication ,wait for message treatment */
+		g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
+	    }
+	}
+    }
+}
+
+
 void process_recv_gsm_sms(void)
 {
     uint8_t i;
@@ -159,7 +244,7 @@ void process_recv_gsm_sms(void)
 	    i = 0;
 	    do
 	    {
-		g_sms_buffer[i] = sms.read();
+		g_sms_buffer[i] = g_gsm_sms.read();
 		i++;
 	    }
 	    while (g_sms_buffer[i-1] != 0);
@@ -215,8 +300,7 @@ void process_action(void)
 	    }
 
 	    /* Then send OK is ready */
-	    g_send_to_masterIO[0] = GSM_IO_COMMAND_INIT_OK;
-	    send_masterIO(g_send_to_masterIO, 1);
+	    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 1);
 
 	    g_gsm_init = GSM_INIT_OK;
 
@@ -229,7 +313,12 @@ void process_action(void)
 	}
 	else if (g_process_action == PROCESS_ACTION_SMS)
 	{
-
+	    /* send message */
+	    sprintf(g_sender_number, NICO_NUMBER);
+	    g_gsm_sms.beginSMS(g_sender_number);
+	    g_gsm_sms.print((char*)g_recv_masterIO);
+	    g_gsm_sms.endSMS();
+	    delay(500);
 	}
 
 	/* end of action, wait for a new one */
@@ -239,7 +328,7 @@ void process_action(void)
 
 void loop()
 {
-    process_recv_command();
+    process_recv_masterIO();
     process_action();
     process_recv_gsm_sms();
 }

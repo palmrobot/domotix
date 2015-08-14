@@ -34,7 +34,9 @@
 
 #define PIN_				10
 
+#define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			40
+
 
 #define PIN_SS_ETH_CONTROLLER 		50
 
@@ -472,7 +474,10 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
     Serial1.write(size);
 
     /* Write Data */
-    Serial1.write(buffer, size);
+    if (buffer != NULL)
+    {
+	Serial1.write(buffer, size);
+    }
 }
 
 void send_SMS_P(PGM_P str)
@@ -1021,7 +1026,7 @@ void process_recv_gsm(void)
 		crc = 0;
 		for(i = 0; i < size; i++)
 		{
-		    /* get incoming write: */
+		    /* get incoming data: */
 		    g_recv_gsm[i] = Serial1.read();
 		    crc += g_recv_gsm[i];
 		}
