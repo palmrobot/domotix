@@ -57,17 +57,31 @@ Master I/O Board                     GSM Board
 
 #define CMD_DATA_MAX				60
 
-uint8_t g_recv_masterIO[CMD_DATA_MAX];
-uint8_t g_send_to_masterIO[CMD_DATA_MAX];
-uint8_t g_gsm_command = 0;
+char g_recv_masterIO[CMD_DATA_MAX];
+char g_send_to_masterIO[CMD_DATA_MAX];
+char g_gsm_command = 0;
 
 /********************************************************/
 /*      Key  definitions                                */
 /********************************************************/
-/* 1) "xxxxx Domotix"  => "Bonjour Name"
+/* 1) "Bonjour Domotix"  => "Bonjour Name !"
  *
- * 2) "
+ * 2) "Stop les alertes" => "Les alertes sont desactivees"
+ *
+ * 3) "Demarre les alertes" => "Les alertes sont activees"
  */
+
+#define SMS_RESP_0				"Systeme d'envoi de SMS ready !!"
+
+#define SMS_RECV_1				"Bonjour Domotix"
+#define SMS_RESP_1_N				"Bonjour Nicolas !!"
+#define SMS_RESP_1_E				"Bonjour Estelle !!"
+
+#define SMS_RECV_2				"Stop les alertes"
+#define SMS_RESP_2				"Les envois d'alertes sont desactivees"
+
+#define SMS_RECV_3				"Demarre les alertes"
+#define SMS_RESP_3				"Les alertes sont activees"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -91,7 +105,9 @@ GSM_SMS g_gsm_sms;
 /* Array to hold the number a SMS is retreived from */
 #define PHONE_NUMBER_LEN			20
 char    g_sender_number[PHONE_NUMBER_LEN];
-char    g_sms_buffer[150];
+
+#define SMS_LEN					150
+char    g_sms_buffer[SMS_LEN+1];
 
 
 /********************************************************/
@@ -120,6 +136,9 @@ uint8_t g_process_recv_sms;
 #define GSM_INIT_OK					1
 uint8_t g_gsm_init;
 
+#define GSM_CRITICAL_ALERTE_OFF				0
+#define GSM_CRITICAL_ALERTE_ON				1
+uint8_t g_critical_alertes;
 
 void setup()
 {
@@ -132,7 +151,8 @@ void setup()
     g_process_recv_sms		= PROCESS_RECV_SMS_DO_NOTHING;
 
     /* Init global variables */
-    g_gsm_init			 = GSM_INIT_FAILED;
+    g_gsm_init			= GSM_INIT_FAILED;
+    g_critical_alertes		= GSM_CRITICAL_ALERTE_OFF;
 
     /* init pipes */
     g_recv_masterIO[0]	= 0;
@@ -161,6 +181,25 @@ void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
     if (buffer != NULL)
     {
 	Serial.write(buffer, size);
+    }
+}
+
+
+void send_SMS(char *message, const char *phone_number)
+{
+    if (g_critical_alertes == GSM_CRITICAL_ALERTE_ON)
+    {
+	/* send message */
+	sprintf(g_sender_number, phone_number);
+	g_gsm_sms.beginSMS(g_sender_number);
+	if (strlen(message) > SMS_LEN)
+	{
+	    /* then tronc it */
+	    message[SMS_LEN] = '\0';
+	}
+	g_gsm_sms.print((char*)message);
+	g_gsm_sms.endSMS();
+	delay(500);
     }
 }
 
@@ -255,20 +294,35 @@ void process_recv_gsm_sms(void)
 	    /* Check sender */
 	    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
 	    {
+		if (strcmp(g_sms_buffer, SMS_RECV_1) == 0)
+		{
+		    send_SMS(SMS_RESP_1_N, NICO_NUMBER);
+		}
+		else if (strcmp(g_sms_buffer, SMS_RECV_2) == 0)
+		{
+		    send_SMS(SMS_RESP_2, NICO_NUMBER);
+		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
 
+		    /* GSM_IO_COMMAND_CRITICAL_TIME */
+		}
+		else if (strcmp(g_sms_buffer, SMS_RECV_3) == 0)
+		{
+		    send_SMS(SMS_RESP_3, NICO_NUMBER);
+		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
+
+		    /* GSM_IO_COMMAND_CRITICAL_TIME */
+		}
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
 	    {
-
+		if (strcmp(g_sms_buffer, SMS_RECV_1) == 0)
+		{
+		    send_SMS(SMS_RESP_1_E, ESTELLE_NUMBER);
+		}
 	    }
 	    else
 	    {
 		/* Discard */
-		/* send acces denied  message */
-		g_gsm_sms.beginSMS(g_sender_number);
-		sprintf(g_sms_buffer,"! Acces Denied !");
-		g_gsm_sms.print(g_sms_buffer);
-		g_gsm_sms.endSMS();
 		delay(500);
 	    }
 	}
@@ -302,6 +356,10 @@ void process_action(void)
 	    /* Then send OK is ready */
 	    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 1);
 
+	    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
+	    send_SMS(SMS_RESP_0, NICO_NUMBER);
+	    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
+
 	    g_gsm_init = GSM_INIT_OK;
 
 	    /* start polling sms */
@@ -313,12 +371,7 @@ void process_action(void)
 	}
 	else if (g_process_action == PROCESS_ACTION_SMS)
 	{
-	    /* send message */
-	    sprintf(g_sender_number, NICO_NUMBER);
-	    g_gsm_sms.beginSMS(g_sender_number);
-	    g_gsm_sms.print((char*)g_recv_masterIO);
-	    g_gsm_sms.endSMS();
-	    delay(500);
+	    send_SMS(g_recv_masterIO, NICO_NUMBER);
 	}
 
 	/* end of action, wait for a new one */
