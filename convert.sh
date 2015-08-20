@@ -8,3 +8,8 @@ sed -i -e '/^$/d' ${i}.htm
 sed -i -e 's/>\s*</></g' ${i}.htm
 done
 
+cp index.htm debug.htm
+patch -p0 < patch_debug.htm
+
+echo "Convertion Done!"
+
