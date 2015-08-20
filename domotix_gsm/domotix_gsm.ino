@@ -83,6 +83,9 @@ char g_gsm_command = 0;
 #define SMS_RECV_3				"Demarre les alertes"
 #define SMS_RESP_3				"Les alertes sont activees"
 
+#define SMS_RECV_4				"Allume la lumiere 1"
+#define SMS_RECV_5				"Eteint la lumiere 1"
+
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
@@ -303,14 +306,16 @@ void process_recv_gsm_sms(void)
 		    send_SMS(SMS_RESP_2, NICO_NUMBER);
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
 
-		    /* GSM_IO_COMMAND_CRITICAL_TIME */
+		    g_send_to_masterIO[0] = 0;
+		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, &g_send_to_masterIO, 1);
 		}
 		else if (strcmp(g_sms_buffer, SMS_RECV_3) == 0)
 		{
 		    send_SMS(SMS_RESP_3, NICO_NUMBER);
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 
-		    /* GSM_IO_COMMAND_CRITICAL_TIME */
+		    g_send_to_masterIO[0] = 1;
+		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, &g_send_to_masterIO, 1);
 		}
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
@@ -320,6 +325,23 @@ void process_recv_gsm_sms(void)
 		    send_SMS(SMS_RESP_1_E, ESTELLE_NUMBER);
 		}
 	    }
+	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
+	    {
+		if (strcmp(g_sms_buffer, SMS_RECV_4) == 0)
+		{
+		    g_send_to_masterIO[0] = 1;
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, &g_send_to_masterIO, 1);
+		}
+	    }
+	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
+	    {
+		if (strcmp(g_sms_buffer, SMS_RECV_5) == 0)
+		{
+		    g_send_to_masterIO[0] = 0;
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, &g_send_to_masterIO, 1);
+		}
+	    }
+
 	    else
 	    {
 		/* Discard */
@@ -354,7 +376,7 @@ void process_action(void)
 	    }
 
 	    /* Then send OK is ready */
-	    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 1);
+	    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 
 	    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 	    send_SMS(SMS_RESP_0, NICO_NUMBER);
