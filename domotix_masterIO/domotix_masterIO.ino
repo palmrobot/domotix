@@ -602,6 +602,18 @@ void deal_with_code(char item, char type, char code)
 
     switch (item)
     {
+	case 'w':
+	{
+	    if (g_critical_time)
+	    {
+		PgmClientPrint("Système d'alertes activé");
+	    }
+	}break;
+	case 'x':
+	{
+	    g_client.print(VERSION);
+	}
+	break;
 	case 'y':
 	{
 	    g_debug = 1;
@@ -621,11 +633,6 @@ void deal_with_code(char item, char type, char code)
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
 	}break;
-	case 'x':
-	{
-	    g_client.print(VERSION);
-	}
-	break;
 	case 'A':
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_garage_droite.curr],
