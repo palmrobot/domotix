@@ -166,7 +166,7 @@ void setup()
 }
 
 
-void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
+void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
 {
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -183,7 +183,7 @@ void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
     /* Write Data */
     if (buffer != NULL)
     {
-	Serial.write(buffer, size);
+	Serial.write((unsigned char*)buffer, size);
     }
 }
 
@@ -307,7 +307,7 @@ void process_recv_gsm_sms(void)
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
 
 		    g_send_to_masterIO[0] = 0;
-		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, &g_send_to_masterIO, 1);
+		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
 		else if (strcmp(g_sms_buffer, SMS_RECV_3) == 0)
 		{
@@ -315,7 +315,7 @@ void process_recv_gsm_sms(void)
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 
 		    g_send_to_masterIO[0] = 1;
-		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, &g_send_to_masterIO, 1);
+		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
@@ -330,7 +330,7 @@ void process_recv_gsm_sms(void)
 		if (strcmp(g_sms_buffer, SMS_RECV_4) == 0)
 		{
 		    g_send_to_masterIO[0] = 1;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, &g_send_to_masterIO, 1);
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
@@ -338,7 +338,7 @@ void process_recv_gsm_sms(void)
 		if (strcmp(g_sms_buffer, SMS_RECV_5) == 0)
 		{
 		    g_send_to_masterIO[0] = 0;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, &g_send_to_masterIO, 1);
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 	    }
 

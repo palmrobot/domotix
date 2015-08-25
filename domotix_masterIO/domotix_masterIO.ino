@@ -606,7 +606,7 @@ void deal_with_code(char item, char type, char code)
 	{
 	    if (g_critical_time)
 	    {
-		PgmClientPrint("Système d'alertes activé");
+		PgmClientPrint("Systeme d'alertes active");
 	    }
 	}break;
 	case 'x':
