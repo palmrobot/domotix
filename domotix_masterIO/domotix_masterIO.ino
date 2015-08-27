@@ -9,7 +9,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v3.0"
+#define VERSION				"v3.01"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -49,6 +49,9 @@
 #define PIN_ETHER_SELECT		53
 
 
+#define LIGHT_OFF			1
+#define LIGHT_ON			0
+
 
 /********************************************************/
 /*      State  GSM definitions                          */
@@ -65,16 +68,12 @@ Master I/O Board                     GSM Board
     |--START CMD NB_DATA DATA CRC------->|
     |<----------ACK CRC------------------|
     |                                    |
-    |-- FA 82 00 00 -------------------->| Ask for init GSM module
-    |<--------- FB 00--------------------| Ack with CRC from sent data
-    |                                    |
     |-- FA 83 XX "message to send" YY -> | Message to send by SMS
     |<--------- FB YY--------------------| Ack with CRC from sent data
     |                                    |
 */
 
-#define IO_GSM_COMMAND_INIT			0x82
-#define IO_GSM_COMMAND_SMS			0x83
+#define IO_GSM_COMMAND_SMS			0x82
 
 
 /*
@@ -330,6 +329,7 @@ void setup(void)
 
     /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
+    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
 
     /* init Process */
 #ifdef DEBUG

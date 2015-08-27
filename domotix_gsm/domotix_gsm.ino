@@ -15,16 +15,13 @@ Master I/O Board                     GSM Board
     |--START CMD NB_DATA DATA CRC------->|
     |<----------ACK CRC------------------|
     |                                    |
-    |-- FA 82 00 00 -------------------->| Ask for init GSM module
-    |<--------- FB 00--------------------| Ack with CRC from sent data
     |                                    |
-    |-- FA 83 XX "message to send" YY -> | Message to send by SMS
+    |-- FA 82 XX "message to send" YY -> | Message to send by SMS
     |<--------- FB YY--------------------| Ack with CRC from sent data
     |                                    |
 */
 
-#define IO_GSM_COMMAND_INIT			0x82
-#define IO_GSM_COMMAND_SMS			0x83
+#define IO_GSM_COMMAND_SMS			0x82
 
 
 /*
@@ -124,7 +121,6 @@ uint8_t g_process_recv_masterIO;
 
 uint8_t g_process_action;
 #define PROCESS_ACTION_NONE				0
-#define PROCESS_ACTION_INIT				IO_GSM_COMMAND_INIT
 #define PROCESS_ACTION_SMS				IO_GSM_COMMAND_SMS
 
 uint8_t g_process_recv_sms;
@@ -145,6 +141,8 @@ uint8_t g_critical_alertes;
 
 void setup()
 {
+    boolean not_connected;
+
     /* Initialize the output pins for the DAC control. */
 
 
@@ -163,6 +161,34 @@ void setup()
     /* initialize serial communications at 115200 bps: */
     Serial.begin(115200);
     delay(100);
+
+    /* init GSM */
+    /* Start GSM connection */
+    not_connected = true;
+
+    while(not_connected)
+    {
+	if(g_gsm_access.begin(PIN_SIM_CODE) == GSM_READY)
+	{
+	    not_connected = false;
+	}
+	else
+	{
+	    delay(500);
+	}
+    }
+
+    /* Then send OK is ready */
+    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
+
+    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
+    send_SMS(SMS_RESP_0, NICO_NUMBER);
+    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
+
+    g_gsm_init = GSM_INIT_OK;
+
+    /* start polling sms */
+    g_process_recv_sms = PROCESS_RECV_SMS_WAIT_SMS;
 }
 
 
@@ -353,45 +379,9 @@ void process_recv_gsm_sms(void)
 
 void process_action(void)
 {
-    boolean not_connected;
-
     if (g_process_action)
     {
-	if (g_process_action == PROCESS_ACTION_INIT)
-	{
-	    /* init GSM */
-	    /* Start GSM connection */
-	    not_connected = true;
-
-	    while(not_connected)
-	    {
-		if(g_gsm_access.begin(PIN_SIM_CODE) == GSM_READY)
-		{
-		    not_connected = false;
-		}
-		else
-		{
-		    delay(500);
-		}
-	    }
-
-	    /* Then send OK is ready */
-	    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
-
-	    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
-	    send_SMS(SMS_RESP_0, NICO_NUMBER);
-	    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
-
-	    g_gsm_init = GSM_INIT_OK;
-
-	    /* start polling sms */
-	    g_process_recv_sms = PROCESS_RECV_SMS_WAIT_SMS;
-
-	    /* restart waiting for command */
-	    g_process_recv_masterIO == PROCESS_RECV_MASTERIO_WAIT_COMMAND;
-
-	}
-	else if (g_process_action == PROCESS_ACTION_SMS)
+	if (g_process_action == PROCESS_ACTION_SMS)
 	{
 	    send_SMS(g_recv_masterIO, NICO_NUMBER);
 	}
