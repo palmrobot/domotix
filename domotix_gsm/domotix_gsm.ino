@@ -56,7 +56,20 @@ Master I/O Board                     GSM Board
 
 char g_recv_masterIO[CMD_DATA_MAX];
 char g_send_to_masterIO[CMD_DATA_MAX];
-char g_gsm_command = 0;
+char g_command = 0;
+
+
+#define CMD_STATE_START				1
+#define CMD_STATE_CMD				2
+#define CMD_STATE_SIZE				3
+#define CMD_STATE_DATA				4
+#define CMD_STATE_CRC				5
+#define CMD_STATE_END				6
+
+uint8_t g_recv_state;
+uint8_t g_recv_size;
+uint8_t g_recv_index;
+uint8_t g_recv_crc;
 
 /********************************************************/
 /*      Key  definitions                                */
@@ -154,6 +167,9 @@ void setup()
     /* Init global variables */
     g_gsm_init			= GSM_INIT_FAILED;
     g_critical_alertes		= GSM_CRITICAL_ALERTE_OFF;
+    g_recv_state		= CMD_STATE_START;
+    g_recv_size			= 0;
+    g_recv_index		= 0;
 
     /* init pipes */
     g_recv_masterIO[0]	= 0;
@@ -194,6 +210,8 @@ void setup()
 
 void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
 {
+    char crc = 0;
+
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
@@ -211,6 +229,9 @@ void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
     {
 	Serial.write((unsigned char*)buffer, size);
     }
+
+    /* Send CRC */
+    Serial.write(crc);
 }
 
 
@@ -243,58 +264,128 @@ void process_recv_masterIO(void)
 
     if (g_process_recv_masterIO == PROCESS_RECV_MASTERIO_WAIT_COMMAND)
     {
-	/* if we get a valid char, read char */
-	if (Serial.available() > 0)
+	switch(g_recv_state)
 	{
-	    /* get Start Byte */
-	    value = Serial.read();
-	    if (value == COMMAND_START)
+	    case CMD_STATE_START:
 	    {
-		/* Read Command */
-		while (Serial.available() == 0);
-		g_gsm_command = Serial.read();
-
-		/* Read Size of Data */
-		while (Serial.available() == 0);
-		size = Serial.read();
-
-		/* Wait for all data */
-		while (Serial.available() < size);
-
-		crc = 0;
-		for(i = 0; i < size; i++)
+		/* if we get a valid char, read char */
+		if (Serial.available() > 0)
 		{
-		    /* get incoming data: */
-		    g_recv_masterIO[i] = Serial.read();
-		    crc += g_recv_masterIO[i];
+		    value = Serial.read();
+		    if (value == COMMAND_START)
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CMD;
+		    }
+		    else
+		    {
+			/* retry state */
+			g_recv_state = CMD_STATE_START;
+		    }
 		}
-
-		/* Add null terminated string */
-		g_recv_masterIO[size-1] = '\0';
-
-		/* Read CRC of Data */
-		while (Serial.available() == 0);
-		recv_crc = Serial.read();
-
-		/* check CRC */
-		if (recv_crc != crc)
+		break;
+		case CMD_STATE_CMD:
 		{
-		    /* wrong command
-		     * Discard it
-		     */
-		    g_gsm_command = 0;
+		    /* if we get a valid char, read char */
+		    if (Serial.available() > 0)
+		    {
+			g_command = Serial.read();
+
+			/* next state */
+			g_recv_state = CMD_STATE_SIZE;
+		    }
 		}
+		break;
+		case CMD_STATE_SIZE:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial.available() > 0)
+		    {
+			g_recv_size  = Serial.read();
 
-		/* Set action plan */
-		g_process_action = g_gsm_command;
+			if (g_recv_size > 0)
+			{
+			    g_recv_index = 0;
+			    g_recv_crc   = 0;
 
-		/* Disable communication ,wait for message treatment */
-		g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
+			    /* next state */
+			    g_recv_state = CMD_STATE_DATA;
+			}
+			else
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_CRC;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_DATA:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial.available() > 0)
+		    {
+			/* get incoming data: */
+			g_recv_masterIO[g_recv_index] = Serial.read();
+			g_recv_crc += g_recv_masterIO[g_recv_index];
+			g_recv_index++;
+
+			if (g_recv_index = g_recv_size)
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_CRC;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_CRC:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial.available() > 0)
+		    {
+			recv_crc  = Serial.read();
+
+			/* =======================> BYPASS CRC !!!!!! */
+#if 0
+			/* check CRC */
+			if (recv_crc != g_recv_crc)
+			{
+			    /* wrong command
+			     * Discard it
+			     */
+			    g_command = 0;
+
+			    /* start waiting for an other comand */
+			    g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
+
+			    /* restart */
+			    g_recv_state = CMD_STATE_START;
+			}
+			else
+#endif
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_END;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_END:
+		{
+		    /* Set action plan */
+		    g_process_action = g_command;
+
+		    /* Disable communication ,wait for message treatment */
+		    g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
+
+		    /* next state */
+		    g_recv_state = CMD_STATE_START;
+		}
+		break;
+
 	    }
 	}
     }
 }
-
 
 void process_recv_gsm_sms(void)
 {
@@ -343,28 +434,22 @@ void process_recv_gsm_sms(void)
 		    g_send_to_masterIO[0] = 1;
 		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
+		else if (strcmp(g_sms_buffer, SMS_RECV_4) == 0)
+		{
+		    g_send_to_masterIO[0] = 1;
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
+		}
+		else if (strcmp(g_sms_buffer, SMS_RECV_5) == 0)
+		{
+		    g_send_to_masterIO[0] = 0;
+		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
+		}
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
 	    {
 		if (strcmp(g_sms_buffer, SMS_RECV_1) == 0)
 		{
 		    send_SMS(SMS_RESP_1_E, ESTELLE_NUMBER);
-		}
-	    }
-	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
-	    {
-		if (strcmp(g_sms_buffer, SMS_RECV_4) == 0)
-		{
-		    g_send_to_masterIO[0] = 1;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
-		}
-	    }
-	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
-	    {
-		if (strcmp(g_sms_buffer, SMS_RECV_5) == 0)
-		{
-		    g_send_to_masterIO[0] = 0;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 	    }
 
@@ -379,16 +464,32 @@ void process_recv_gsm_sms(void)
 
 void process_action(void)
 {
-    if (g_process_action)
-    {
-	if (g_process_action == PROCESS_ACTION_SMS)
-	{
-	    send_SMS(g_recv_masterIO, NICO_NUMBER);
-	}
+    uint8_t action_done;
 
-	/* end of action, wait for a new one */
+    action_done = 1;
+    if (g_process_action != PROCESS_ACTION_NONE)
+    {
+	switch(g_process_action)
+	{
+	    case PROCESS_ACTION_SMS:
+	    {
+		if (g_critical_alertes == GSM_CRITICAL_ALERTE_ON)
+		{
+		    send_SMS(g_recv_masterIO, NICO_NUMBER);
+		}
+	    }
+	}
+    }
+
+    if (action_done)
+    {
+	/* start waiting for an other comand */
+	g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
+
+	/* Reset action, wait for next one */
 	g_process_action = PROCESS_ACTION_NONE;
     }
+
 }
 
 void loop()

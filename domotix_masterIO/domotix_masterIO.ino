@@ -9,7 +9,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v3.01"
+#define VERSION				"v3.02"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -106,8 +106,21 @@ Master I/O Board                     GSM Board
 
 #define CMD_DATA_MAX				60
 
-uint8_t g_recv_gsm[CMD_DATA_MAX];
-uint8_t g_gsm_command = 0;
+char g_recv_gsm[CMD_DATA_MAX];
+char g_send_to_gsm[CMD_DATA_MAX];
+char g_command = 0;
+
+#define CMD_STATE_START				1
+#define CMD_STATE_CMD				2
+#define CMD_STATE_SIZE				3
+#define CMD_STATE_DATA				4
+#define CMD_STATE_CRC				5
+#define CMD_STATE_END				6
+
+uint8_t g_recv_state;
+uint8_t g_recv_size;
+uint8_t g_recv_index;
+uint8_t g_recv_crc;
 
 /********************************************************/
 /*      Process definitions                             */
@@ -372,6 +385,12 @@ void setup(void)
     g_debug = 0;
     g_NTP   = 0;
     g_init  = 1;
+    g_recv_state = CMD_STATE_START;
+    g_recv_size = 0;
+    g_recv_index = 0;
+
+    /* init pipes */
+    g_recv_gsm[0]	= 0;
 
     /* Init global var for web code */
     g_garage_droite.old = 0;
@@ -461,6 +480,8 @@ void ClientPrintln_P(PGM_P str)
 
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
+    char crc = 0;
+
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
@@ -474,10 +495,13 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
     Serial1.write(size);
 
     /* Write Data */
-    if (buffer != NULL)
+    if ((buffer != NULL) && (size > 0))
     {
 	Serial1.write(buffer, size);
     }
+
+    /* Send CRC */
+    Serial1.write(crc);
 }
 
 void send_SMS_P(PGM_P str)
@@ -494,9 +518,13 @@ void send_SMS_P(PGM_P str)
 	message[i] = (uint8_t)pgm_read_byte(str);
     }
 
-    if ((i > 0) && (g_critical_time))
+    if (i > 0)
     {
-	send_gsm(IO_GSM_COMMAND_SMS, message, strlen((const char*)message) - 1);
+	/* set null terminated string */
+	i++;
+	message[i] = 0;
+
+	send_gsm(IO_GSM_COMMAND_SMS, message, i+1);
     }
 }
 
@@ -1010,52 +1038,127 @@ void process_recv_gsm(void)
     uint8_t crc;
     uint8_t recv_crc;
 
+
     if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
-	/* if we get a valid char, read char */
-	if (Serial1.available() > 0)
+	switch(g_recv_state)
 	{
-	    /* get Start Byte */
-	    value = Serial1.read();
-	    if (value == COMMAND_START)
+	    case CMD_STATE_START:
 	    {
-		/* Read Command */
-		while (Serial1.available() == 0);
-		g_gsm_command = Serial1.read();
-
-		/* Read Size of Data */
-		while (Serial1.available() == 0);
-		size = Serial1.read();
-
-		/* Wait for all data */
-		while (Serial1.available() < size);
-
-		crc = 0;
-		for(i = 0; i < size; i++)
+		/* if we get a valid char, read char */
+		if (Serial1.available() > 0)
 		{
-		    /* get incoming data: */
-		    g_recv_gsm[i] = Serial1.read();
-		    crc += g_recv_gsm[i];
+		    value = Serial1.read();
+		    if (value == COMMAND_START)
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CMD;
+		    }
+		    else
+		    {
+			/* retry state */
+			g_recv_state = CMD_STATE_START;
+		    }
 		}
-
-		/* Read CRC of Data */
-		while (Serial1.available() == 0);
-		recv_crc = Serial1.read();
-
-		/* check CRC */
-		if (recv_crc != crc)
+		break;
+		case CMD_STATE_CMD:
 		{
-		    /* wrong command
-		     * Discard it
-		     */
-		    g_gsm_command = 0;
+		    /* if we get a valid char, read char */
+		    if (Serial1.available() > 0)
+		    {
+			g_command = Serial1.read();
+
+			/* next state */
+			g_recv_state = CMD_STATE_SIZE;
+		    }
 		}
+		break;
+		case CMD_STATE_SIZE:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial1.available() > 0)
+		    {
+			g_recv_size  = Serial1.read();
 
-		/* Set action plan */
-		g_process_action = g_gsm_command;
+			if (g_recv_size > 0)
+			{
+			    g_recv_index = 0;
+			    g_recv_crc   = 0;
 
-		/* Disable communication ,wait for message treatment */
-		g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
+			    /* next state */
+			    g_recv_state = CMD_STATE_DATA;
+			}
+			else
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_CRC;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_DATA:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial1.available() > 0)
+		    {
+			/* get incoming data: */
+			g_recv_gsm[g_recv_index] = Serial1.read();
+			g_recv_crc += g_recv_gsm[g_recv_index];
+			g_recv_index++;
+
+			if (g_recv_index = g_recv_size)
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_CRC;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_CRC:
+		{
+		    /* if we get a valid char, read char */
+		    if (Serial1.available() > 0)
+		    {
+			recv_crc  = Serial1.read();
+
+			/* =======================> BYPASS CRC !!!!!! */
+#if 0
+			/* check CRC */
+			if (recv_crc != g_recv_crc)
+			{
+			    /* wrong command
+			     * Discard it
+			     */
+			    g_command = 0;
+
+			    /* start waiting for an other comand */
+			    g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
+
+			    /* restart */
+			    g_recv_state = CMD_STATE_START;
+			}
+			else
+#endif
+			{
+			    /* next state */
+			    g_recv_state = CMD_STATE_END;
+			}
+		    }
+		}
+		break;
+		case CMD_STATE_END:
+		{
+		    /* Set action plan */
+		    g_process_action = g_command;
+
+		    /* Disable communication ,wait for message treatment */
+		    g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
+
+		    /* next state */
+		    g_recv_state = CMD_STATE_START;
+		}
+		break;
+
 	    }
 	}
     }
@@ -1980,6 +2083,9 @@ void process_schedule(void)
 
 void process_action(void)
 {
+    uint8_t action_done;
+
+    action_done = 1;
     if (g_process_action != PROCESS_ACTION_NONE)
     {
 	switch(g_process_action)
@@ -1988,11 +2094,11 @@ void process_action(void)
 	    {
 		if (g_recv_gsm[0] == 1)
 		{
-		    digitalWrite(PIN_OUT_LIGHT_1, 1);
+		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
 		}
 		else
 		{
-		    digitalWrite(PIN_OUT_LIGHT_1, 0);
+		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
 		}
 	    }break;
 
@@ -2028,8 +2134,16 @@ void process_action(void)
 	    }
 	    break;
 	}
-	/* Reset action, wait for next one */
-	g_process_action = PROCESS_ACTION_NONE;
+
+	if (action_done)
+	{
+	    /* start waiting for an other comand */
+	    g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
+
+	    /* Reset action, wait for next one */
+	    g_process_action = PROCESS_ACTION_NONE;
+	}
+
     }
 }
 
