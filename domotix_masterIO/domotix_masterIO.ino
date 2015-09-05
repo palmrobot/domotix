@@ -9,7 +9,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v3.02"
+#define VERSION				"v3.03"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -478,9 +478,9 @@ void ClientPrintln_P(PGM_P str)
 
 
 
-void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
+void send_gsm(uint8_t cmd, char *buffer, uint8_t size)
 {
-    char crc = 0;
+    uint8_t crc = 0;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -497,25 +497,28 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
     /* Write Data */
     if ((buffer != NULL) && (size > 0))
     {
-	Serial1.write(buffer, size);
+	Serial1.write((uint8_t *)buffer, size);
     }
 
     /* Send CRC */
     Serial1.write(crc);
 }
 
+/** Store a string in flash memory.*/
+#define send_SMS(x) send_SMS_P(PSTR(x))
+
 void send_SMS_P(PGM_P str)
 {
-    uint8_t message[CMD_DATA_MAX + 1];
+    char message[CMD_DATA_MAX + 1];
     uint8_t i;
 
     i = 0;
-    message[0] = (uint8_t)pgm_read_byte(str);
+    message[0] = pgm_read_byte(str);
 
     while ((i < CMD_DATA_MAX) && (message[i] != 0))
     {
 	i++;
-	message[i] = (uint8_t)pgm_read_byte(str);
+	message[i] = pgm_read_byte(str);
     }
 
     if (i > 0)
@@ -1690,7 +1693,7 @@ void process_domotix(void)
 	    if (g_garage_droite.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Porte droite du garage est ouverte");
+		send_SMS("Porte droite du garage est ouverte");
 	    }
 
 	    wait_a_moment = 1;
@@ -1712,7 +1715,7 @@ void process_domotix(void)
 	    if (g_garage_gauche.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Porte gauche du garage est ouverte");
+		send_SMS("Porte gauche du garage est ouverte");
 	    }
 
 	    wait_a_moment = 1;
@@ -1734,7 +1737,7 @@ void process_domotix(void)
 	    if (g_garage_fenetre.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Fenetre du garage est ouverte");
+		send_SMS("Fenetre du garage est ouverte");
 	    }
 
 	    wait_a_moment = 1;
@@ -1756,7 +1759,7 @@ void process_domotix(void)
 	    if (g_cellier_porte_ext.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Porte exterieure du cellier est ouverte");
+		send_SMS("Porte exterieure du cellier est ouverte");
 	    }
 
 	    wait_a_moment = 1;
@@ -1820,7 +1823,7 @@ void process_domotix(void)
 	    if (g_cuisine_porte_ext.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Porte exterieure de la cuisine est ouverte");
+		send_SMS("Porte exterieure de la cuisine est ouverte");
 	    }
 
 	    wait_a_moment = 1;
@@ -1841,7 +1844,7 @@ void process_domotix(void)
 	    if (g_lingerie_fenetre.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("La Fenetre de la lingerie vient de s'ouvrir");
+		send_SMS("La Fenetre de la lingerie vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1863,7 +1866,7 @@ void process_domotix(void)
 	    if (g_entree_porte_ext.curr)
 	    {
 		/* Send SMS */
-		send_SMS_P("Porte d'entree est ouverte");
+		send_SMS("Porte d'entree est ouverte");
 	    }
 
 	    wait_a_moment = 1;

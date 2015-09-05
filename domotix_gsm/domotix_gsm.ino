@@ -210,7 +210,7 @@ void setup()
 
 void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
 {
-    char crc = 0;
+    uint8_t crc = 0;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -225,9 +225,9 @@ void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
     Serial.write(size);
 
     /* Write Data */
-    if (buffer != NULL)
+    if ((buffer != NULL) && (size > 0))
     {
-	Serial.write((unsigned char*)buffer, size);
+	Serial.write((uint8_t *)buffer, size);
     }
 
     /* Send CRC */
@@ -247,7 +247,7 @@ void send_SMS(char *message, const char *phone_number)
 	    /* then tronc it */
 	    message[SMS_LEN] = '\0';
 	}
-	g_gsm_sms.print((char*)message);
+	g_gsm_sms.print(message);
 	g_gsm_sms.endSMS();
 	delay(500);
     }
@@ -408,9 +408,6 @@ void process_recv_gsm_sms(void)
 	    }
 	    while (g_sms_buffer[i-1] != 0);
 
-	    /* Delete message from modem memory */
-	    g_gsm_sms.flush();
-
 	    /* Check sender */
 	    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
 	    {
@@ -453,11 +450,11 @@ void process_recv_gsm_sms(void)
 		}
 	    }
 
-	    else
-	    {
-		/* Discard */
-		delay(500);
-	    }
+	    /* Discard */
+	    delay(500);
+
+	    /* Delete message from modem memory */
+	    g_gsm_sms.flush();
 	}
     }
 }
