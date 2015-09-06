@@ -8,8 +8,9 @@
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
+/* #define DEBUG_SMS */
 
-#define VERSION				"v3.04"
+#define VERSION				"v3.05"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -71,10 +72,14 @@ Master I/O Board                     GSM Board
     |-- FA 82 XX "message to send" YY -> | Message to send by SMS
     |<--------- FB YY--------------------| Ack with CRC from sent data
     |                                    |
+    |-- FA 83 XX "message to send" YY -> | Message to ask if GSM is init
+    |<--------- FB YY--------------------| Ack with CRC from sent data
+
+    |                                    |
 */
 
 #define IO_GSM_COMMAND_SMS			0x82
-
+#define IO_GSM_COMMAND_IS_INIT			0x83
 
 /*
 Master I/O Board                     GSM Board
@@ -294,6 +299,7 @@ char  g_clock[9];
 char  g_date[9];
 uint8_t g_sched_temperature = 0;
 uint8_t g_init = 0;
+uint8_t g_init_gsm = 0;
 
 /********************************************************/
 /*      NTP			                        */
@@ -342,7 +348,9 @@ void setup(void)
 
     /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
+    pinMode(PIN_OUT_GSM_INIT, OUTPUT);
     digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+    digitalWrite(PIN_OUT_GSM_INIT, 0);
 
     /* init Process */
 #ifdef DEBUG
@@ -359,7 +367,7 @@ void setup(void)
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
     Serial.begin(115200);
-    dealy(100);
+    delay(100);
 #endif
 
     /* initialize the serial communications with GSM Board */
@@ -385,6 +393,7 @@ void setup(void)
     g_debug = 0;
     g_NTP   = 0;
     g_init  = 1;
+    g_init_gsm = 0;
     g_recv_state = CMD_STATE_START;
     g_recv_size = 0;
     g_recv_index = 0;
@@ -480,7 +489,10 @@ void ClientPrintln_P(PGM_P str)
 
 void send_gsm(uint8_t cmd, char *buffer, uint8_t size)
 {
-    uint8_t crc = 0;
+    uint8_t crc = 42;
+
+    if (g_init_gsm == 0)
+	return;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -1059,106 +1071,99 @@ void process_recv_gsm(void)
 			g_recv_state = CMD_STATE_START;
 		    }
 		}
-		break;
-		case CMD_STATE_CMD:
+	    }break;
+	    case CMD_STATE_CMD:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial1.available() > 0)
 		{
-		    /* if we get a valid char, read char */
-		    if (Serial1.available() > 0)
-		    {
-			g_command = Serial1.read();
-
-			/* next state */
-			g_recv_state = CMD_STATE_SIZE;
-		    }
-		}
-		break;
-		case CMD_STATE_SIZE:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial1.available() > 0)
-		    {
-			g_recv_size  = Serial1.read();
-
-			if (g_recv_size > 0)
-			{
-			    g_recv_index = 0;
-			    g_recv_crc   = 0;
-
-			    /* next state */
-			    g_recv_state = CMD_STATE_DATA;
-			}
-			else
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_CRC;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_DATA:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial1.available() > 0)
-		    {
-			/* get incoming data: */
-			g_recv_gsm[g_recv_index] = Serial1.read();
-			g_recv_crc += g_recv_gsm[g_recv_index];
-			g_recv_index++;
-
-			if (g_recv_index = g_recv_size)
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_CRC;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_CRC:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial1.available() > 0)
-		    {
-			recv_crc  = Serial1.read();
-
-			/* =======================> BYPASS CRC !!!!!! */
-#if 0
-			/* check CRC */
-			if (recv_crc != g_recv_crc)
-			{
-			    /* wrong command
-			     * Discard it
-			     */
-			    g_command = 0;
-
-			    /* start waiting for an other comand */
-			    g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
-
-			    /* restart */
-			    g_recv_state = CMD_STATE_START;
-			}
-			else
-#endif
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_END;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_END:
-		{
-		    /* Set action plan */
-		    g_process_action = g_command;
-
-		    /* Disable communication ,wait for message treatment */
-		    g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
+		    g_command = Serial1.read();
 
 		    /* next state */
-		    g_recv_state = CMD_STATE_START;
+		    g_recv_state = CMD_STATE_SIZE;
 		}
-		break;
+	    }break;
+	    case CMD_STATE_SIZE:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial1.available() > 0)
+		{
+		    g_recv_size  = Serial1.read();
 
-	    }
+		    if (g_recv_size > 0)
+		    {
+			g_recv_index = 0;
+			g_recv_crc   = 0;
+
+			/* next state */
+			g_recv_state = CMD_STATE_DATA;
+		    }
+		    else
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CRC;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_DATA:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial1.available() > 0)
+		{
+		    /* get incoming data: */
+		    g_recv_gsm[g_recv_index] = Serial1.read();
+		    g_recv_crc += g_recv_gsm[g_recv_index];
+		    g_recv_index++;
+
+		    if (g_recv_index = g_recv_size)
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CRC;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_CRC:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial1.available() > 0)
+		{
+		    recv_crc  = Serial1.read();
+
+		    /* =======================> BYPASS CRC !!!!!! */
+#if 0
+		    /* check CRC */
+		    if (recv_crc != g_recv_crc)
+		    {
+			/* wrong command
+			 * Discard it
+			 */
+			g_command = 0;
+
+			/* start waiting for an other comand */
+			g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
+
+			/* restart */
+			g_recv_state = CMD_STATE_START;
+		    }
+		    else
+#endif
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_END;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_END:
+	    {
+		/* Set action plan */
+		g_process_action = g_command;
+
+		/* Disable communication ,wait for message treatment */
+		g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
+
+		/* next state */
+		g_recv_state = CMD_STATE_START;
+	    }break;
 	}
     }
 }
@@ -1686,10 +1691,10 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_garage_droite.curr)
+	    if ((g_garage_droite.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Porte droite du garage est ouverte");
+		send_SMS("La porte de droite du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1708,10 +1713,10 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_garage_gauche.curr)
+	    if ((g_garage_gauche.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Porte gauche du garage est ouverte");
+		send_SMS("La porte de gauche du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1730,10 +1735,10 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_garage_fenetre.curr)
+	    if ((g_garage_fenetre.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Fenetre du garage est ouverte");
+		send_SMS("La fenetre du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1752,10 +1757,10 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_cellier_porte_ext.curr)
+	    if ((g_cellier_porte_ext.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Porte exterieure du cellier est ouverte");
+		send_SMS("La porte exterieure du cellier vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1783,7 +1788,7 @@ void process_domotix(void)
 	    /* write in file  */
 	    save_entry("K.txt", g_lingerie_porte_cuisine.curr, TYPE_PORTE);
 
-#ifdef DEBUG
+#ifdef DEBUG_SENSOR
 	    PgmPrint("Lingerie porte cuisine :");Serial.println(g_lingerie_porte_cuisine.curr);
 #endif
 	    wait_a_moment = 1;
@@ -1816,10 +1821,10 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_cuisine_porte_ext.curr)
+	    if ((g_cuisine_porte_ext.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Porte exterieure de la cuisine est ouverte");
+		send_SMS("La porte exterieure de la cuisine vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -1837,7 +1842,7 @@ void process_domotix(void)
 	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
 #endif
 	    /* Critical part */
-	    if (g_lingerie_fenetre.curr)
+	    if ((g_lingerie_fenetre.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
 		send_SMS("La Fenetre de la lingerie vient de s'ouvrir");
@@ -1859,7 +1864,7 @@ void process_domotix(void)
 #endif
 
 	    /* Critical part */
-	    if (g_entree_porte_ext.curr)
+	    if ((g_entree_porte_ext.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
 		send_SMS("Porte d'entree est ouverte");
@@ -2070,6 +2075,13 @@ void process_schedule(void)
 		save_entry_temp("M.txt", g_temperature_ext.curr);
 	    }
 	}
+	else if ((mi % 2) == 0)
+	{
+	    if (g_init_gsm == 0)
+	    {
+		send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
+	    }
+	}
 	else
 	{
 	    g_sched_temperature = 0;
@@ -2084,9 +2096,9 @@ void process_action(void)
 {
     uint8_t action_done;
 
-    action_done = 1;
     if (g_process_action != PROCESS_ACTION_NONE)
     {
+	action_done = 1;
 	switch(g_process_action)
 	{
 	    case PROCESS_ACTION_LIGHT_1:
@@ -2126,6 +2138,7 @@ void process_action(void)
 	    case PROCESS_ACTION_GSM_INIT_OK:
 	    {
 		digitalWrite(PIN_OUT_GSM_INIT, 1);
+		g_init_gsm = 1;
 	    }break;
 
 	    default:

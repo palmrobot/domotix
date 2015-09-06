@@ -19,9 +19,14 @@ Master I/O Board                     GSM Board
     |-- FA 82 XX "message to send" YY -> | Message to send by SMS
     |<--------- FB YY--------------------| Ack with CRC from sent data
     |                                    |
+    |-- FA 83 XX "message to send" YY -> | Message to ask if GSM is init
+    |<--------- FB YY--------------------| Ack with CRC from sent data
+
+    |                                    |
 */
 
 #define IO_GSM_COMMAND_SMS			0x82
+#define IO_GSM_COMMAND_IS_INIT			0x83
 
 
 /*
@@ -135,6 +140,7 @@ uint8_t g_process_recv_masterIO;
 uint8_t g_process_action;
 #define PROCESS_ACTION_NONE				0
 #define PROCESS_ACTION_SMS				IO_GSM_COMMAND_SMS
+#define PROCESS_ACTION_IS_INIT				IO_GSM_COMMAND_IS_INIT
 
 uint8_t g_process_recv_sms;
 #define PROCESS_RECV_SMS_DO_NOTHING			0
@@ -270,6 +276,7 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    value = Serial.read();
+
 		    if (value == COMMAND_START)
 		    {
 			/* next state */
@@ -281,106 +288,99 @@ void process_recv_masterIO(void)
 			g_recv_state = CMD_STATE_START;
 		    }
 		}
-		break;
-		case CMD_STATE_CMD:
+	    }break;
+	    case CMD_STATE_CMD:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial.available() > 0)
 		{
-		    /* if we get a valid char, read char */
-		    if (Serial.available() > 0)
-		    {
-			g_command = Serial.read();
-
-			/* next state */
-			g_recv_state = CMD_STATE_SIZE;
-		    }
-		}
-		break;
-		case CMD_STATE_SIZE:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial.available() > 0)
-		    {
-			g_recv_size  = Serial.read();
-
-			if (g_recv_size > 0)
-			{
-			    g_recv_index = 0;
-			    g_recv_crc   = 0;
-
-			    /* next state */
-			    g_recv_state = CMD_STATE_DATA;
-			}
-			else
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_CRC;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_DATA:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial.available() > 0)
-		    {
-			/* get incoming data: */
-			g_recv_masterIO[g_recv_index] = Serial.read();
-			g_recv_crc += g_recv_masterIO[g_recv_index];
-			g_recv_index++;
-
-			if (g_recv_index = g_recv_size)
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_CRC;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_CRC:
-		{
-		    /* if we get a valid char, read char */
-		    if (Serial.available() > 0)
-		    {
-			recv_crc  = Serial.read();
-
-			/* =======================> BYPASS CRC !!!!!! */
-#if 0
-			/* check CRC */
-			if (recv_crc != g_recv_crc)
-			{
-			    /* wrong command
-			     * Discard it
-			     */
-			    g_command = 0;
-
-			    /* start waiting for an other comand */
-			    g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
-
-			    /* restart */
-			    g_recv_state = CMD_STATE_START;
-			}
-			else
-#endif
-			{
-			    /* next state */
-			    g_recv_state = CMD_STATE_END;
-			}
-		    }
-		}
-		break;
-		case CMD_STATE_END:
-		{
-		    /* Set action plan */
-		    g_process_action = g_command;
-
-		    /* Disable communication ,wait for message treatment */
-		    g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
+		    g_command = Serial.read();
 
 		    /* next state */
-		    g_recv_state = CMD_STATE_START;
+		    g_recv_state = CMD_STATE_SIZE;
 		}
-		break;
+	    }break;
+	    case CMD_STATE_SIZE:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial.available() > 0)
+		{
+		    g_recv_size  = Serial.read();
 
-	    }
+		    if (g_recv_size > 0)
+		    {
+			g_recv_index = 0;
+			g_recv_crc   = 0;
+
+			/* next state */
+			g_recv_state = CMD_STATE_DATA;
+		    }
+		    else
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CRC;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_DATA:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial.available() > 0)
+		{
+		    /* get incoming data: */
+		    g_recv_masterIO[g_recv_index] = Serial.read();
+		    g_recv_crc += g_recv_masterIO[g_recv_index];
+		    g_recv_index++;
+
+		    if (g_recv_index = g_recv_size)
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_CRC;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_CRC:
+	    {
+		/* if we get a valid char, read char */
+		if (Serial.available() > 0)
+		{
+		    recv_crc  = Serial.read();
+
+		    /* =======================> BYPASS CRC !!!!!! */
+#if 0
+		    /* check CRC */
+		    if (recv_crc != g_recv_crc)
+		    {
+			/* wrong command
+			 * Discard it
+			 */
+			g_command = 0;
+
+			/* start waiting for an other comand */
+			g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
+
+			/* restart */
+			g_recv_state = CMD_STATE_START;
+		    }
+		    else
+#endif
+		    {
+			/* next state */
+			g_recv_state = CMD_STATE_END;
+		    }
+		}
+	    }break;
+	    case CMD_STATE_END:
+	    {
+		/* Set action plan */
+		g_process_action = g_command;
+
+		/* Disable communication ,wait for message treatment */
+		g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
+
+		/* next state */
+		g_recv_state = CMD_STATE_START;
+	    }break;
 	}
     }
 }
@@ -461,27 +461,35 @@ void process_action(void)
 {
     uint8_t action_done;
 
-    action_done = 1;
     if (g_process_action != PROCESS_ACTION_NONE)
     {
+	action_done = 1;
+
 	switch(g_process_action)
 	{
 	    case PROCESS_ACTION_SMS:
 	    {
 		send_SMS(g_recv_masterIO, NICO_NUMBER, 0);
-	    }
+	    }break;
+	    case PROCESS_ACTION_IS_INIT:
+	    {
+		if (g_gsm_init == GSM_INIT_OK)
+		{
+		    /*  send OK is ready */
+		    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
+		}
+	    }break;
+	}
+
+	if (action_done)
+	{
+	    /* start waiting for an other comand */
+	    g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
+
+	    /* Reset action, wait for next one */
+	    g_process_action = PROCESS_ACTION_NONE;
 	}
     }
-
-    if (action_done)
-    {
-	/* start waiting for an other comand */
-	g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
-
-	/* Reset action, wait for next one */
-	g_process_action = PROCESS_ACTION_NONE;
-    }
-
 }
 
 void loop()
