@@ -9,7 +9,7 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 
-#define VERSION				"v3.03"
+#define VERSION				"v3.04"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -68,7 +68,7 @@ Master I/O Board                     GSM Board
     |--START CMD NB_DATA DATA CRC------->|
     |<----------ACK CRC------------------|
     |                                    |
-    |-- FA 83 XX "message to send" YY -> | Message to send by SMS
+    |-- FA 82 XX "message to send" YY -> | Message to send by SMS
     |<--------- FB YY--------------------| Ack with CRC from sent data
     |                                    |
 */
@@ -509,25 +509,21 @@ void send_gsm(uint8_t cmd, char *buffer, uint8_t size)
 
 void send_SMS_P(PGM_P str)
 {
-    char message[CMD_DATA_MAX + 1];
     uint8_t i;
 
     i = 0;
-    message[0] = pgm_read_byte(str);
+    g_send_to_gsm[0] = pgm_read_byte(str);
 
-    while ((i < CMD_DATA_MAX) && (message[i] != 0))
+    while ((i < (CMD_DATA_MAX-1)) && (g_send_to_gsm[i] != 0))
     {
 	i++;
-	message[i] = pgm_read_byte(str);
+	str++;
+	g_send_to_gsm[i] = pgm_read_byte(str);
     }
 
     if (i > 0)
     {
-	/* set null terminated string */
-	i++;
-	message[i] = 0;
-
-	send_gsm(IO_GSM_COMMAND_SMS, message, i+1);
+	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, i+1);
     }
 }
 
