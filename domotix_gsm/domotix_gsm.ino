@@ -5,8 +5,8 @@
 /********************************************************/
 
 
-#define COMMAND_START			0xFA
-#define COMMAND_REPLY			0xFB
+#define COMMAND_START			'?'/* 0x3F */
+#define COMMAND_REPLY			'!'
 
 /*
 Master I/O Board                     GSM Board
@@ -25,8 +25,8 @@ Master I/O Board                     GSM Board
     |                                    |
 */
 
-#define IO_GSM_COMMAND_SMS			0x82
-#define IO_GSM_COMMAND_IS_INIT			0x83
+#define IO_GSM_COMMAND_SMS			'#'
+#define IO_GSM_COMMAND_IS_INIT			'$'
 
 
 /*
@@ -51,10 +51,10 @@ Master I/O Board                     GSM Board
 
 */
 
-#define GSM_IO_COMMAND_INIT_OK			0xD1
-#define GSM_IO_COMMAND_INIT_FAILED		0xD2
-#define GSM_IO_COMMAND_LIGHT_1			0xD3
-#define GSM_IO_COMMAND_CRITICAL_TIME		0xD4
+#define GSM_IO_COMMAND_INIT_OK			'('
+#define GSM_IO_COMMAND_INIT_FAILED		')'
+#define GSM_IO_COMMAND_LIGHT_1			'['
+#define GSM_IO_COMMAND_CRITICAL_TIME		']'
 
 
 #define CMD_DATA_MAX				60
@@ -180,10 +180,6 @@ void setup()
     /* init pipes */
     g_recv_masterIO[0]	= 0;
 
-    /* initialize serial communications at 115200 bps: */
-    Serial.begin(115200);
-    delay(100);
-
     /* init GSM */
     /* Start GSM connection */
     not_connected = true;
@@ -200,6 +196,10 @@ void setup()
 	}
     }
 
+    /* initialize serial communications at 115200 bps: */
+    Serial.begin(115200);
+    delay(100);
+
     /* Then send OK is ready */
     send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 
@@ -214,7 +214,7 @@ void setup()
 
 void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
 {
-    uint8_t crc = 0;
+    uint8_t crc = 42;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -226,7 +226,7 @@ void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
     Serial.write(cmd);
 
     /* Send Size of data */
-    Serial.write(size);
+    Serial.write(size+65);
 
     /* Write Data */
     if ((buffer != NULL) && (size > 0))
@@ -276,6 +276,7 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    value = Serial.read();
+		    Serial.write(value);
 
 		    if (value == COMMAND_START)
 		    {
@@ -295,6 +296,7 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    g_command = Serial.read();
+		    Serial.write(g_command);
 
 		    /* next state */
 		    g_recv_state = CMD_STATE_SIZE;
@@ -306,6 +308,8 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    g_recv_size  = Serial.read();
+		    Serial.write(g_recv_size);
+		    g_recv_size  = g_recv_size - 65;
 
 		    if (g_recv_size > 0)
 		    {
@@ -329,6 +333,11 @@ void process_recv_masterIO(void)
 		{
 		    /* get incoming data: */
 		    g_recv_masterIO[g_recv_index] = Serial.read();
+		    Serial.write(g_recv_masterIO[g_recv_index]);
+		    if (g_recv_masterIO[g_recv_index] == '|')
+		    {
+			g_recv_masterIO[g_recv_index] = 0;
+		    }
 		    g_recv_crc += g_recv_masterIO[g_recv_index];
 		    g_recv_index++;
 
@@ -345,7 +354,7 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    recv_crc  = Serial.read();
-
+		    Serial.write(recv_crc);
 		    /* =======================> BYPASS CRC !!!!!! */
 #if 0
 		    /* check CRC */
@@ -374,7 +383,7 @@ void process_recv_masterIO(void)
 	    {
 		/* Set action plan */
 		g_process_action = g_command;
-
+		Serial.write("get command : ");Serial.write(g_process_action);
 		/* Disable communication ,wait for message treatment */
 		g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
 
@@ -469,6 +478,7 @@ void process_action(void)
 	{
 	    case PROCESS_ACTION_SMS:
 	    {
+		Serial.write("send SMS:");Serial.write(g_recv_masterIO);
 		send_SMS(g_recv_masterIO, NICO_NUMBER, 0);
 	    }break;
 	    case PROCESS_ACTION_IS_INIT:
