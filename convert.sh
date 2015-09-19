@@ -10,6 +10,8 @@ done
 
 cp index.htm debug.htm
 patch -p0 < patch_debug.htm
+rm -f debug.htm.rej
+rm -f debug.htm.orig
 
 echo "Convertion Done!"
 

@@ -8,9 +8,9 @@
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
-/* #define DEBUG_SMS */
+/* #define DEBUG_SMS*/
 
-#define VERSION				"v3.05"
+#define VERSION				"v3.06"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -59,8 +59,8 @@
 /********************************************************/
 
 
-#define COMMAND_START			0xFA
-#define COMMAND_REPLY			0xFB
+#define COMMAND_START			0x21
+#define COMMAND_REPLY			0x22
 
 /*
 Master I/O Board                     GSM Board
@@ -78,8 +78,8 @@ Master I/O Board                     GSM Board
     |                                    |
 */
 
-#define IO_GSM_COMMAND_SMS			0x82
-#define IO_GSM_COMMAND_IS_INIT			0x83
+#define IO_GSM_COMMAND_SMS			0x30
+#define IO_GSM_COMMAND_IS_INIT			0x31
 
 /*
 Master I/O Board                     GSM Board
@@ -103,17 +103,17 @@ Master I/O Board                     GSM Board
 
 */
 
-#define GSM_IO_COMMAND_INIT_OK			0xD1
-#define GSM_IO_COMMAND_INIT_FAILED		0xD2
-#define GSM_IO_COMMAND_LIGHT_1			0xD3
-#define GSM_IO_COMMAND_CRITICAL_TIME		0xD4
+#define GSM_IO_COMMAND_INIT_OK			0x41
+#define GSM_IO_COMMAND_INIT_FAILED		0x42
+#define GSM_IO_COMMAND_LIGHT_1			0x43
+#define GSM_IO_COMMAND_CRITICAL_TIME		0x44
 
 
 #define CMD_DATA_MAX				60
 
-char g_recv_gsm[CMD_DATA_MAX];
-char g_send_to_gsm[CMD_DATA_MAX];
-char g_command = 0;
+uint8_t g_recv_gsm[CMD_DATA_MAX];
+uint8_t g_send_to_gsm[CMD_DATA_MAX];
+uint8_t g_command = 0;
 
 #define CMD_STATE_START				1
 #define CMD_STATE_CMD				2
@@ -371,7 +371,7 @@ void setup(void)
 #endif
 
     /* initialize the serial communications with GSM Board */
-    Serial1.begin(115200);
+    Serial.begin(115200);
     delay(100);
 
     /* start the Ethernet connection and the server: */
@@ -487,33 +487,30 @@ void ClientPrintln_P(PGM_P str)
 
 
 
-void send_gsm(uint8_t cmd, char *buffer, uint8_t size)
+void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
     uint8_t crc = 42;
-
-    if (g_init_gsm == 0)
-	return;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
     /* Send Start of transmission */
-    Serial1.write(COMMAND_START);
+    Serial.write(COMMAND_START);
 
     /* Send Command  */
-    Serial1.write(cmd);
+    Serial.write(cmd);
 
     /* Send Size of data */
-    Serial1.write(size);
+    Serial.write(size);
 
     /* Write Data */
     if ((buffer != NULL) && (size > 0))
     {
-	Serial1.write((uint8_t *)buffer, size);
+	Serial.write(buffer, size);
     }
 
     /* Send CRC */
-    Serial1.write(crc);
+    Serial.write(crc);
 }
 
 /** Store a string in flash memory.*/
@@ -522,6 +519,9 @@ void send_gsm(uint8_t cmd, char *buffer, uint8_t size)
 void send_SMS_P(PGM_P str)
 {
     uint8_t i;
+
+    if (g_init_gsm == 0)
+     	return;
 
     i = 0;
     g_send_to_gsm[0] = pgm_read_byte(str);
@@ -535,7 +535,7 @@ void send_SMS_P(PGM_P str)
 
     if (i > 0)
     {
-	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, i+1);
+	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, i);
     }
 }
 
@@ -1044,11 +1044,9 @@ void process_serial(void)
 void process_recv_gsm(void)
 {
     uint8_t value;
-    uint8_t size;
     uint8_t i;
     uint8_t crc;
     uint8_t recv_crc;
-
 
     if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
@@ -1057,9 +1055,10 @@ void process_recv_gsm(void)
 	    case CMD_STATE_START:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial1.available() > 0)
+		if (Serial.available() > 0)
 		{
-		    value = Serial1.read();
+		    value = Serial.read();
+
 		    if (value == COMMAND_START)
 		    {
 			/* next state */
@@ -1075,9 +1074,9 @@ void process_recv_gsm(void)
 	    case CMD_STATE_CMD:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial1.available() > 0)
+		if (Serial.available() > 0)
 		{
-		    g_command = Serial1.read();
+		    g_command = Serial.read();
 
 		    /* next state */
 		    g_recv_state = CMD_STATE_SIZE;
@@ -1086,9 +1085,9 @@ void process_recv_gsm(void)
 	    case CMD_STATE_SIZE:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial1.available() > 0)
+		if (Serial.available() > 0)
 		{
-		    g_recv_size  = Serial1.read();
+		    g_recv_size  = Serial.read();
 
 		    if (g_recv_size > 0)
 		    {
@@ -1108,15 +1107,18 @@ void process_recv_gsm(void)
 	    case CMD_STATE_DATA:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial1.available() > 0)
+		if (Serial.available() > 0)
 		{
 		    /* get incoming data: */
-		    g_recv_gsm[g_recv_index] = Serial1.read();
+		    g_recv_gsm[g_recv_index] = Serial.read();
 		    g_recv_crc += g_recv_gsm[g_recv_index];
 		    g_recv_index++;
 
-		    if (g_recv_index = g_recv_size)
+		    if (g_recv_index == g_recv_size)
 		    {
+			/* Set null terminated string */
+			g_recv_gsm[g_recv_index] = 0;
+
 			/* next state */
 			g_recv_state = CMD_STATE_CRC;
 		    }
@@ -1125,9 +1127,12 @@ void process_recv_gsm(void)
 	    case CMD_STATE_CRC:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial1.available() > 0)
+		if (Serial.available() > 0)
 		{
-		    recv_crc  = Serial1.read();
+		    recv_crc  = Serial.read();
+
+		    /* next state */
+		    g_recv_state = CMD_STATE_END;
 
 		    /* =======================> BYPASS CRC !!!!!! */
 #if 0
@@ -1146,11 +1151,11 @@ void process_recv_gsm(void)
 			g_recv_state = CMD_STATE_START;
 		    }
 		    else
-#endif
 		    {
 			/* next state */
 			g_recv_state = CMD_STATE_END;
 		    }
+#endif
 		}
 	    }break;
 	    case CMD_STATE_END:
@@ -1164,6 +1169,10 @@ void process_recv_gsm(void)
 		/* next state */
 		g_recv_state = CMD_STATE_START;
 	    }break;
+	    default:
+	    {
+	    }
+	    break;
 	}
     }
 }
@@ -2075,12 +2084,9 @@ void process_schedule(void)
 		save_entry_temp("M.txt", g_temperature_ext.curr);
 	    }
 	}
-	else if ((mi % 2) == 0)
+	else if ((g_init_gsm == 0) && ((mi & 0x2) == mi))
 	{
-	    if (g_init_gsm == 0)
-	    {
 		send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
-	    }
 	}
 	else
 	{

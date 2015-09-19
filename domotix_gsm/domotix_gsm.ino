@@ -5,8 +5,8 @@
 /********************************************************/
 
 
-#define COMMAND_START			'?'/* 0x3F */
-#define COMMAND_REPLY			'!'
+#define COMMAND_START			0x21
+#define COMMAND_REPLY			0x22
 
 /*
 Master I/O Board                     GSM Board
@@ -25,9 +25,8 @@ Master I/O Board                     GSM Board
     |                                    |
 */
 
-#define IO_GSM_COMMAND_SMS			'#'
-#define IO_GSM_COMMAND_IS_INIT			'$'
-
+#define IO_GSM_COMMAND_SMS			0x30
+#define IO_GSM_COMMAND_IS_INIT			0x31
 
 /*
 Master I/O Board                     GSM Board
@@ -51,17 +50,16 @@ Master I/O Board                     GSM Board
 
 */
 
-#define GSM_IO_COMMAND_INIT_OK			'('
-#define GSM_IO_COMMAND_INIT_FAILED		')'
-#define GSM_IO_COMMAND_LIGHT_1			'['
-#define GSM_IO_COMMAND_CRITICAL_TIME		']'
-
+#define GSM_IO_COMMAND_INIT_OK			0x41
+#define GSM_IO_COMMAND_INIT_FAILED		0x42
+#define GSM_IO_COMMAND_LIGHT_1			0x43
+#define GSM_IO_COMMAND_CRITICAL_TIME		0x44
 
 #define CMD_DATA_MAX				60
 
-char g_recv_masterIO[CMD_DATA_MAX];
-char g_send_to_masterIO[CMD_DATA_MAX];
-char g_command = 0;
+uint8_t g_recv_masterIO[CMD_DATA_MAX];
+uint8_t g_send_to_masterIO[CMD_DATA_MAX];
+uint8_t g_command = 0;
 
 
 #define CMD_STATE_START				1
@@ -125,7 +123,8 @@ GSM_SMS g_gsm_sms;
 #define PHONE_NUMBER_LEN			20
 char    g_sender_number[PHONE_NUMBER_LEN];
 
-char    g_sms_buffer[CMD_DATA_MAX];
+char    g_sms_recv_buffer[CMD_DATA_MAX];
+char    g_sms_send_buffer[CMD_DATA_MAX];
 
 
 /********************************************************/
@@ -141,6 +140,7 @@ uint8_t g_process_action;
 #define PROCESS_ACTION_NONE				0
 #define PROCESS_ACTION_SMS				IO_GSM_COMMAND_SMS
 #define PROCESS_ACTION_IS_INIT				IO_GSM_COMMAND_IS_INIT
+#define PROCESS_ACTION_TEST				IO_GSM_COMMAND_TEST
 
 uint8_t g_process_recv_sms;
 #define PROCESS_RECV_SMS_DO_NOTHING			0
@@ -203,7 +203,8 @@ void setup()
     /* Then send OK is ready */
     send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 
-    send_SMS(SMS_RESP_0, NICO_NUMBER, 1);
+    sprintf(g_sms_send_buffer, SMS_RESP_0 );
+    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 
     g_gsm_init = GSM_INIT_OK;
 
@@ -212,7 +213,7 @@ void setup()
 }
 
 
-void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
+void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
     uint8_t crc = 42;
 
@@ -226,12 +227,12 @@ void send_masterIO(uint8_t cmd, char *buffer, uint8_t size)
     Serial.write(cmd);
 
     /* Send Size of data */
-    Serial.write(size+65);
+    Serial.write(size);
 
     /* Write Data */
     if ((buffer != NULL) && (size > 0))
     {
-	Serial.write((uint8_t *)buffer, size);
+	Serial.write(buffer, size);
     }
 
     /* Send CRC */
@@ -249,7 +250,7 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
 	if (strlen(message) > (CMD_DATA_MAX-1))
 	{
 	    /* then trunc it */
-	    message[CMD_DATA_MAX-1] = '\0';
+	    message[CMD_DATA_MAX-1] = 0;
 	}
 	g_gsm_sms.print(message);
 	g_gsm_sms.endSMS();
@@ -261,7 +262,6 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
 void process_recv_masterIO(void)
 {
     uint8_t value;
-    uint8_t size;
     uint8_t i;
     uint8_t crc;
     uint8_t recv_crc;
@@ -276,7 +276,6 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    value = Serial.read();
-		    Serial.write(value);
 
 		    if (value == COMMAND_START)
 		    {
@@ -296,7 +295,6 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    g_command = Serial.read();
-		    Serial.write(g_command);
 
 		    /* next state */
 		    g_recv_state = CMD_STATE_SIZE;
@@ -307,9 +305,7 @@ void process_recv_masterIO(void)
 		/* if we get a valid char, read char */
 		if (Serial.available() > 0)
 		{
-		    g_recv_size  = Serial.read();
-		    Serial.write(g_recv_size);
-		    g_recv_size  = g_recv_size - 65;
+		    g_recv_size = Serial.read();
 
 		    if (g_recv_size > 0)
 		    {
@@ -333,16 +329,14 @@ void process_recv_masterIO(void)
 		{
 		    /* get incoming data: */
 		    g_recv_masterIO[g_recv_index] = Serial.read();
-		    Serial.write(g_recv_masterIO[g_recv_index]);
-		    if (g_recv_masterIO[g_recv_index] == '|')
-		    {
-			g_recv_masterIO[g_recv_index] = 0;
-		    }
 		    g_recv_crc += g_recv_masterIO[g_recv_index];
 		    g_recv_index++;
 
-		    if (g_recv_index = g_recv_size)
+		    if (g_recv_index == g_recv_size)
 		    {
+			/* Set null terminated string */
+			g_recv_masterIO[g_recv_index] = 0;
+
 			/* next state */
 			g_recv_state = CMD_STATE_CRC;
 		    }
@@ -354,7 +348,10 @@ void process_recv_masterIO(void)
 		if (Serial.available() > 0)
 		{
 		    recv_crc  = Serial.read();
-		    Serial.write(recv_crc);
+
+		    /* next state */
+		    g_recv_state = CMD_STATE_END;
+
 		    /* =======================> BYPASS CRC !!!!!! */
 #if 0
 		    /* check CRC */
@@ -372,24 +369,28 @@ void process_recv_masterIO(void)
 			g_recv_state = CMD_STATE_START;
 		    }
 		    else
-#endif
 		    {
 			/* next state */
 			g_recv_state = CMD_STATE_END;
 		    }
+#endif
 		}
 	    }break;
 	    case CMD_STATE_END:
 	    {
 		/* Set action plan */
 		g_process_action = g_command;
-		Serial.write("get command : ");Serial.write(g_process_action);
+
 		/* Disable communication ,wait for message treatment */
 		g_process_recv_masterIO = PROCESS_RECV_MASTERIO_DO_NOTHING;
 
 		/* next state */
 		g_recv_state = CMD_STATE_START;
 	    }break;
+	    default:
+	    {
+	    }
+	    break;
 	}
     }
 }
@@ -410,40 +411,44 @@ void process_recv_gsm_sms(void)
 	    i = 0;
 	    do
 	    {
-		g_sms_buffer[i] = g_gsm_sms.read();
+		g_sms_recv_buffer[i] = g_gsm_sms.read();
 		i++;
 	    }
-	    while (g_sms_buffer[i-1] != 0);
+	    while (g_sms_recv_buffer[i-1] != 0);
 
 	    /* Check sender */
 	    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
 	    {
-		if (strcmp(g_sms_buffer, SMS_RECV_1) == 0)
+		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
 		{
-		    send_SMS(SMS_RESP_1_N, NICO_NUMBER, 1);
+		    sprintf(g_sms_send_buffer,SMS_RESP_1_N);
+		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 		}
-		else if (strcmp(g_sms_buffer, SMS_RECV_2) == 0)
+		else if (strcmp(g_sms_recv_buffer, SMS_RECV_2) == 0)
 		{
-		    send_SMS(SMS_RESP_2, NICO_NUMBER, 1);
+		    sprintf(g_sms_send_buffer, SMS_RESP_2);
+		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
+
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
 
 		    g_send_to_masterIO[0] = 0;
 		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_buffer, SMS_RECV_3) == 0)
+		else if (strcmp(g_sms_recv_buffer, SMS_RECV_3) == 0)
 		{
-		    send_SMS(SMS_RESP_3, NICO_NUMBER, 1);
+		    sprintf(g_sms_send_buffer, SMS_RESP_3);
+		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 
 		    g_send_to_masterIO[0] = 1;
 		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_buffer, SMS_RECV_4) == 0)
+		else if (strcmp(g_sms_recv_buffer, SMS_RECV_4) == 0)
 		{
 		    g_send_to_masterIO[0] = 1;
 		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_buffer, SMS_RECV_5) == 0)
+		else if (strcmp(g_sms_recv_buffer, SMS_RECV_5) == 0)
 		{
 		    g_send_to_masterIO[0] = 0;
 		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
@@ -451,9 +456,10 @@ void process_recv_gsm_sms(void)
 	    }
 	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
 	    {
-		if (strcmp(g_sms_buffer, SMS_RECV_1) == 0)
+		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
 		{
-		    send_SMS(SMS_RESP_1_E, ESTELLE_NUMBER, 1);
+		    sprintf(g_sms_send_buffer,SMS_RESP_1_E );
+		    send_SMS(g_sms_send_buffer, ESTELLE_NUMBER, 1);
 		}
 	    }
 
@@ -478,8 +484,7 @@ void process_action(void)
 	{
 	    case PROCESS_ACTION_SMS:
 	    {
-		Serial.write("send SMS:");Serial.write(g_recv_masterIO);
-		send_SMS(g_recv_masterIO, NICO_NUMBER, 0);
+		send_SMS((char*)g_recv_masterIO, NICO_NUMBER, 0);
 	    }break;
 	    case PROCESS_ACTION_IS_INIT:
 	    {
@@ -489,6 +494,10 @@ void process_action(void)
 		    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 		}
 	    }break;
+	    default:
+	    {
+	    }
+	    break;
 	}
 
 	if (action_done)
