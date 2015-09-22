@@ -197,7 +197,7 @@ void setup()
     }
 
     /* initialize serial communications at 115200 bps: */
-    Serial.begin(115200);
+    Serial.begin(9600);
     delay(100);
 
     /* Then send OK is ready */
@@ -325,7 +325,7 @@ void process_recv_masterIO(void)
 	    case CMD_STATE_DATA:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
+		while ((Serial.available() > 0) && (g_recv_index < g_recv_size))
 		{
 		    /* get incoming data: */
 		    g_recv_masterIO[g_recv_index] = Serial.read();

@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.06"
+#define VERSION				"v3.07"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -366,12 +366,12 @@ void setup(void)
 
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
-    Serial.begin(115200);
+    Serial.begin(9600);
     delay(100);
 #endif
 
     /* initialize the serial communications with GSM Board */
-    Serial.begin(115200);
+    Serial.begin(9600);
     delay(100);
 
     /* start the Ethernet connection and the server: */
@@ -441,6 +441,7 @@ void setup(void)
 	g_data_item[i].clas[0] = 0;
     }
 
+    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -520,8 +521,8 @@ void send_SMS_P(PGM_P str)
 {
     uint8_t i;
 
-    if (g_init_gsm == 0)
-     	return;
+    /* if (g_init_gsm == 0) */
+    /*  	return; */
 
     i = 0;
     g_send_to_gsm[0] = pgm_read_byte(str);
@@ -1107,7 +1108,7 @@ void process_recv_gsm(void)
 	    case CMD_STATE_DATA:
 	    {
 		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
+		while ((Serial.available() > 0) && (g_recv_index < g_recv_size))
 		{
 		    /* get incoming data: */
 		    g_recv_gsm[g_recv_index] = Serial.read();
@@ -1876,7 +1877,7 @@ void process_domotix(void)
 	    if ((g_entree_porte_ext.curr) && (g_init == 0))
 	    {
 		/* Send SMS */
-		send_SMS("Porte d'entree est ouverte");
+		send_SMS("La porte d'entree vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
