@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.07"
+#define VERSION				"v3.10"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -32,6 +32,10 @@
 #define PIN_CUISINE_EXT			12 /* L */
 #define PIN_LINGERIE_FENETRE		11 /* N */
 #define PIN_ENTREE_PORTE_EXT		13 /* O */
+#define PIN_POULAILLER_PORTE		14 /* P */
+#define PIN_OUT_POULAILLER_ACTION	15 /* Q */
+#define PIN_POULE_GAUCHE		16 /* R */
+#define PIN_POULE_DROITE		17 /* S */
 
 #define PIN_				10
 
@@ -197,6 +201,9 @@ state_porte_s g_cuisine_porte_ext; /* L */
 state_lumiere_s g_temperature_ext; /* M */
 state_porte_s g_lingerie_fenetre; /* N */
 state_porte_s g_entree_porte_ext; /* O */
+state_porte_s g_poulailler_porte; /* P */
+state_porte_s g_poule_gauche; /* R */
+state_porte_s g_poule_droite; /* S */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	220
@@ -204,6 +211,10 @@ state_porte_s g_entree_porte_ext; /* O */
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
 uint8_t g_critical_time = 0;
+
+uint8_t g_sched_temperature = 0;
+uint8_t g_sched_door_already_opened = 0;
+uint8_t g_sched_door_already_closed = 0;
 
 
 /********************************************************/
@@ -284,6 +295,10 @@ data_item_t g_data_item[NB_ITEM];
 #define STATE_STATE			4
 #define STATE_CLASS			5
 
+
+uint16_t g_time_to_open[13]  = {0, 825 , 732 , 636 , 623 , 540 , 538 , 613 , 700 , 701 , 735 , 739 , 827};
+uint16_t g_time_to_close[13] = {0, 1652, 1738, 1829, 2020, 2108, 2151, 2202, 2131, 2031, 1924, 1722, 1645};
+
 EthernetServer g_server(9090);
 EthernetClient g_client;
 
@@ -297,7 +312,6 @@ time_t g_prevDisplay = 0;
 file_web_t g_filename;
 char  g_clock[9];
 char  g_date[9];
-uint8_t g_sched_temperature = 0;
 uint8_t g_init = 0;
 uint8_t g_init_gsm = 0;
 
@@ -345,12 +359,18 @@ void setup(void)
     pinMode(PIN_CUISINE_EXT, INPUT);
     pinMode(PIN_LINGERIE_FENETRE, INPUT);
     pinMode(PIN_ENTREE_PORTE_EXT, INPUT);
+    pinMode(PIN_POULAILLER_PORTE, INPUT);
+    pinMode(PIN_POULE_GAUCHE, INPUT);
+    pinMode(PIN_POULE_DROITE, INPUT);
 
     /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
     pinMode(PIN_OUT_GSM_INIT, OUTPUT);
+    pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
+
     digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
     digitalWrite(PIN_OUT_GSM_INIT, 0);
+    digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 
     /* init Process */
 #ifdef DEBUG
@@ -428,9 +448,15 @@ void setup(void)
 
     g_cuisine_porte_ext.old = 0;
 
+    g_poulailler_porte.old = 0;
+    g_poule_gauche.old = 0;
+    g_poule_droite.old = 0;
+
     g_temperature_ext.old = 0;
 
     g_sched_temperature = 0;
+    g_sched_door_already_opened = 0;
+    g_sched_door_already_closed = 0;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -774,6 +800,21 @@ void deal_with_code(char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_entree_porte_ext.curr],
 		strlen(ptr_code->name[g_entree_porte_ext.curr]));
+	}break;
+	case 'P':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_poulailler_porte.curr],
+		strlen(ptr_code->name[g_poulailler_porte.curr]));
+	}break;
+	case 'R':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_poule_gauche.curr],
+		strlen(ptr_code->name[g_poule_gauche.curr]));
+	}break;
+	case 'S':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_poule_droite.curr],
+		strlen(ptr_code->name[g_poule_droite.curr]));
 	}break;
 	default:
 
@@ -1883,6 +1924,53 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
+	g_poulailler_porte.curr = digitalRead(PIN_POULAILLER_PORTE);
+	if ((g_poulailler_porte.curr != g_poulailler_porte.old) || (g_init))
+	{
+	    g_poulailler_porte.old = g_poulailler_porte.curr;
+
+	    /* write in file  */
+	    save_entry("P.txt", g_poulailler_porte.curr, TYPE_PORTE);
+
+#ifdef DEBUG_SENSOR
+	    PgmPrint("Poulailler Porte :");Serial.println(g_poulailler_porte.curr);
+#endif
+
+	    wait_a_moment = 1;
+	}
+
+	g_poule_gauche.curr = digitalRead(PIN_POULE_GAUCHE);
+	if ((g_poule_gauche.curr != g_poule_gauche.old) || (g_init))
+	{
+	    g_poule_gauche.old = g_poule_gauche.curr;
+
+	    /* write in file  */
+	    save_entry("R.txt", g_poule_gauche.curr, TYPE_PORTE);
+
+#ifdef DEBUG_SENSOR
+	    PgmPrint("Poule gauche :");Serial.println(g_poule_gauche.curr);
+#endif
+
+	    wait_a_moment = 1;
+	}
+
+	g_poule_droite.curr = digitalRead(PIN_POULE_DROITE);
+	if ((g_poule_droite.curr != g_poule_droite.old) || (g_init))
+	{
+	    g_poule_droite.old = g_poule_droite.curr;
+
+	    /* write in file  */
+	    save_entry("S.txt", g_poule_droite.curr, TYPE_PORTE);
+
+#ifdef DEBUG_SENSOR
+	    PgmPrint("Poule droite :");Serial.println(g_poule_droite.curr);
+#endif
+
+	    wait_a_moment = 1;
+	}
+
+
+
 
 	/* ================================
 	 *
@@ -2056,22 +2144,20 @@ void process_time(void)
 
 void process_schedule(void)
 {
-    int ho;
-    int mi;
-    int da;
-    int mo;
+    uint16_t time;
+    uint16_t date;
+    uint8_t  mon;
 
     if (g_process_schedule != PROCESS_SCHEDULE_OFF)
     {
 	/* get time values */
-	ho = hour();
-	mi = minute();
-	da = day();
-	mo = month();
+	time = (100*hour()) + minute();
+	date = (100*month()) + day();
+	mon = month();
 
 	/*************************************/
 	/* Scheduling for temperature sensor */
-	if ((ho == 8) || (ho == 14) || (ho == 20))
+	if ((time == 800) || (time == 1400) || (time == 2000))
 	{
 	    if (g_sched_temperature == 0)
 	    {
@@ -2085,17 +2171,49 @@ void process_schedule(void)
 		save_entry_temp("M.txt", g_temperature_ext.curr);
 	    }
 	}
-	else if ((g_init_gsm == 0) && ((mi & 0x2) == mi))
-	{
-		send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
-	}
 	else
 	{
 	    g_sched_temperature = 0;
 	}
 
-	/*************************************/
+	if ((g_init_gsm == 0) && ((time & 0x2) == time))
+	{
+	    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
+	}
 
+	if (time == g_time_to_open[mon])
+	{
+	    if (g_sched_door_already_opened == 0)
+	    {
+		g_sched_door_already_opened = 1;
+
+		/* Open the door */
+		digitalWrite(PIN_OUT_POULAILLER_ACTION, 1);
+		delay(500);
+		digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
+	    }
+	}
+	else
+	{
+	    g_sched_door_already_opened = 0;
+	}
+
+	if (time == g_time_to_close[mon])
+	{
+	    if (g_sched_door_already_closed == 0)
+	    {
+		g_sched_door_already_closed = 1;
+
+		/* close the door */
+		digitalWrite(PIN_OUT_POULAILLER_ACTION, 1);
+		delay(500);
+		digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
+	    }
+	}
+	else
+	{
+	    g_sched_door_already_closed = 0;
+	}
     }
 }
 
