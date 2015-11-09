@@ -32,10 +32,10 @@
 #define PIN_CUISINE_EXT			12 /* L */
 #define PIN_LINGERIE_FENETRE		11 /* N */
 #define PIN_ENTREE_PORTE_EXT		13 /* O */
-#define PIN_POULAILLER_PORTE		14 /* P */
-#define PIN_OUT_POULAILLER_ACTION	15 /* Q */
-#define PIN_POULE_GAUCHE		16 /* R */
-#define PIN_POULE_DROITE		17 /* S */
+#define PIN_OUT_POULAILLER_ACTION	14 /* blue */
+#define PIN_POULAILLER_PORTE		15 /* P yellow */
+#define PIN_POULE_GAUCHE		16 /* R grey */
+#define PIN_POULE_DROITE		17 /* S brown */
 
 #define PIN_				10
 
@@ -296,8 +296,8 @@ data_item_t g_data_item[NB_ITEM];
 #define STATE_CLASS			5
 
 
-uint16_t g_time_to_open[13]  = {0, 825 , 732 , 636 , 623 , 540 , 538 , 613 , 700 , 701 , 735 , 739 , 827};
-uint16_t g_time_to_close[13] = {0, 1652, 1738, 1829, 2020, 2108, 2151, 2202, 2131, 2031, 1924, 1722, 1645};
+uint16_t g_time_to_open[13]  = {0, 715 , 730 , 645 , 615 , 515 , 500 , 530 , 600 , 630 , 700 , 730 , 700};
+uint16_t g_time_to_close[13] = {0, 1800, 1810, 1830, 2000, 2030, 2100, 2030, 2000, 1930, 1900, 1800, 1730};
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
@@ -2189,7 +2189,7 @@ void process_schedule(void)
 
 		/* Open the door */
 		digitalWrite(PIN_OUT_POULAILLER_ACTION, 1);
-		delay(500);
+		delay(1000);
 		digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 	    }
 	}
@@ -2206,7 +2206,7 @@ void process_schedule(void)
 
 		/* close the door */
 		digitalWrite(PIN_OUT_POULAILLER_ACTION, 1);
-		delay(500);
+		delay(1000);
 		digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 	    }
 	}
