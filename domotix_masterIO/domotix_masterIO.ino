@@ -259,15 +259,23 @@ typedef struct
 #define WEB_CODE_LUMIERE	'2'
 #define WEB_CODE_CLASS		'3'
 #define WEB_CODE_VOLET		'4'
+#define WEB_CODE_CLASS_POULE	'5'
+#define WEB_CODE_POULE		'6'
+
+
 #define TYPE_PORTE		0
 #define TYPE_LUMIERE		1
 #define TYPE_CLASS		2
 #define TYPE_VOLET		3
+#define TYPE_CLASS_POULE	4
+#define TYPE_POULE		5
 
-code_t g_code[] = { {"Ouverte", "Fermee"},  /* code 1 */
-		    {"Allumee", "Eteinte"}, /* code 2 */
-		    {"ko", "ok"}, /* code 3 */
-		    {"Ouvert", "Ferme"} }; /* code 4 */
+code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
+		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
+		    {"ko", "ok"}, /* TYPE_CLASS */
+		    {"Ouvert", "Ferme"}, /* TYPE_VOLET */
+		    {"po", "vi"}, /* TYPE_CLASS_POULE */
+		    {"Poule presente", "Vide"}}; /* TYPE_POULE */
 
 /*
  * 12/12/14
@@ -659,6 +667,14 @@ void deal_with_code(char item, char type, char code)
 	case WEB_CODE_VOLET:
 	{
 	    ptr_code = &g_code[TYPE_VOLET];
+	}break;
+	case WEB_CODE_CLASS_POULE:
+	{
+	    ptr_code = &g_code[TYPE_CLASS_POULE];
+	}break;
+	case WEB_CODE_POULE:
+	{
+	    ptr_code = &g_code[TYPE_POULE];
 	}break;
 	default:
 	{
@@ -1683,7 +1699,14 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
     state = (code_t*)&g_code[type];
     fd.write((const uint8_t*)state->name[value], 1);
     fd.println();
-    class_html = (code_t*)&g_code[2];
+    if (type == TYPE_POULE)
+    {
+	class_html = (code_t*)&g_code[TYPE_CLASS_POULE];
+    }
+    else
+    {
+	class_html = (code_t*)&g_code[TYPE_CLASS];
+    }
     fd.println(class_html->name[value]);
     fd.close();
 }
@@ -1945,7 +1968,7 @@ void process_domotix(void)
 	    g_poule_gauche.old = g_poule_gauche.curr;
 
 	    /* write in file  */
-	    save_entry("R.txt", g_poule_gauche.curr, TYPE_PORTE);
+	    save_entry("R.txt", g_poule_gauche.curr, TYPE_POULE);
 
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Poule gauche :");Serial.println(g_poule_gauche.curr);
@@ -1960,7 +1983,7 @@ void process_domotix(void)
 	    g_poule_droite.old = g_poule_droite.curr;
 
 	    /* write in file  */
-	    save_entry("S.txt", g_poule_droite.curr, TYPE_PORTE);
+	    save_entry("S.txt", g_poule_droite.curr, TYPE_POULE);
 
 #ifdef DEBUG_SENSOR
 	    PgmPrint("Poule droite :");Serial.println(g_poule_droite.curr);
