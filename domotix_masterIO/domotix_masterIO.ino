@@ -641,10 +641,6 @@ void deal_with_file(char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_item->clas,strlen(ptr_item->clas));
 	}break;
-	case '4':
-	{
-	    g_client.write((uint8_t*)ptr_item->poule,strlen(ptr_item->poule));
-	}break;
 	default:
 	break;
     }
