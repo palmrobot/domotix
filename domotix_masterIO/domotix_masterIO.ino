@@ -274,8 +274,8 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
 		    {"ko", "ok"}, /* TYPE_CLASS */
 		    {"Ouvert", "Ferme"}, /* TYPE_VOLET */
-		    {"po", "vi"}, /* TYPE_CLASS_POULE */
-		    {"Poule presente", "Vide"}}; /* TYPE_POULE */
+		    {"vi", "po"}, /* TYPE_CLASS_POULE */
+		    {"Vide", "Poule"}}; /* TYPE_POULE */
 
 /*
  * 12/12/14
@@ -305,7 +305,7 @@ data_item_t g_data_item[NB_ITEM];
 
 
 uint16_t g_time_to_open[13]  = {0, 715 , 730 , 645 , 615 , 515 , 500 , 530 , 600 , 630 , 700 , 730 , 700};
-uint16_t g_time_to_close[13] = {0, 1800, 1810, 1830, 2000, 2030, 2100, 2030, 2000, 1930, 1900, 1800, 1730};
+uint16_t g_time_to_close[13] = {0, 1800, 1810, 1830, 2000, 2030, 2100, 2030, 2000, 1930, 1900, 1745, 1730};
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
@@ -327,7 +327,7 @@ uint8_t g_init_gsm = 0;
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			2
+#define TIMEZONE			1
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
