@@ -203,7 +203,7 @@ void setup()
     /* Then send OK is ready */
     send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 
-    sprintf(g_sms_send_buffer, SMS_RESP_0 );
+    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_0);
     send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 
     g_gsm_init = GSM_INIT_OK;
@@ -245,7 +245,7 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
     if ((g_critical_alertes == GSM_CRITICAL_ALERTE_ON) || (force == 1))
     {
 	/* send message */
-	sprintf(g_sender_number, phone_number);
+	snprintf(g_sender_number, PHONE_NUMBER_LEN, phone_number);
 	g_gsm_sms.beginSMS(g_sender_number);
 	if (strlen(message) > (CMD_DATA_MAX-1))
 	{
@@ -421,12 +421,12 @@ void process_recv_gsm_sms(void)
 	    {
 		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
 		{
-		    sprintf(g_sms_send_buffer,SMS_RESP_1_N);
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_1_N);
 		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 		}
 		else if (strcmp(g_sms_recv_buffer, SMS_RECV_2) == 0)
 		{
-		    sprintf(g_sms_send_buffer, SMS_RESP_2);
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_2);
 		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
@@ -436,7 +436,7 @@ void process_recv_gsm_sms(void)
 		}
 		else if (strcmp(g_sms_recv_buffer, SMS_RECV_3) == 0)
 		{
-		    sprintf(g_sms_send_buffer, SMS_RESP_3);
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_3);
 		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 
@@ -458,7 +458,7 @@ void process_recv_gsm_sms(void)
 	    {
 		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
 		{
-		    sprintf(g_sms_send_buffer,SMS_RESP_1_E );
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_1_E );
 		    send_SMS(g_sms_send_buffer, ESTELLE_NUMBER, 1);
 		}
 	    }

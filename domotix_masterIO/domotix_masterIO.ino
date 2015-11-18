@@ -167,6 +167,10 @@ uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_DO_NOTHING		0
 #define PROCESS_RECV_GSM_WAIT_COMMAND		1
 
+uint8_t g_process_delay;
+#define PROCESS_DELAY_OFF			0
+#define PROCESS_DELAY_ON			1
+
 /********************************************************/
 /*      Global definitions                              */
 /********************************************************/
@@ -323,6 +327,19 @@ char  g_date[9];
 uint8_t g_init = 0;
 uint8_t g_init_gsm = 0;
 
+typedef void (*callback_delay) (void);
+
+typedef struct
+{
+    uint32_t delay_start;
+    uint32_t delay_wait;
+    uint8_t  delay_inuse;
+    callback_delay cb;
+}delay_t;
+
+#define NB_DELAY_MAX			10
+delay_t g_delay[NB_DELAY_MAX];
+
 /********************************************************/
 /*      NTP			                        */
 /********************************************************/
@@ -388,6 +405,7 @@ void setup(void)
     g_process_ethernet = PROCESS_ETHERNET_ON;
     g_process_domotix  = PROCESS_DOMOTIX_ON;
     g_process_time     = PROCESS_TIME_OFF;
+    g_process_delay    = PROCESS_DELAY_OFF;
     g_process_schedule = PROCESS_SCHEDULE_ON;
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
@@ -473,6 +491,11 @@ void setup(void)
 	g_data_item[i].hour[0] = 0;
 	g_data_item[i].state[0] = 0;
 	g_data_item[i].clas[0] = 0;
+    }
+
+    for(i = 0; i < NB_DELAY_MAX; i++)
+    {
+	g_delay[i].delay_inuse  = 0;
     }
 
     send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
@@ -2164,6 +2187,57 @@ void process_time(void)
     }
 }
 
+void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay);
+
+void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay)
+{
+    uint32_t current_millis;
+    uint8_t index;
+
+    for(index = 0; index < NB_DELAY_MAX; index++)
+    {
+	if (g_delay[index].delay_inuse == 0)
+	{
+	    current_millis = millis();
+	    g_delay[index].delay_start  = current_millis;
+	    g_delay[index].cb		= call_after_delay;
+	    g_delay[index].delay_inuse  = 1;
+	    return;
+	}
+    }
+
+    /* no more delay in tab availble
+     */
+    delay(time_to_wait);
+}
+
+
+void process_delay(void)
+{
+    uint32_t current_millis;
+    uint8_t index;
+
+    if (g_process_delay != PROCESS_DELAY_OFF)
+    {
+	for(index = 0; index < NB_DELAY_MAX; index++)
+	{
+	    if (g_delay[index].delay_inuse)
+	    {
+		current_millis = millis();
+		if ((current_millis - g_delay[index].delay_start) > g_delay[index].delay_wait)
+		{
+		    /* call CB
+		     */
+		    g_delay[index].cb();
+		    g_delay[index].delay_inuse = 0;
+		    return;
+		}
+	    }
+	}
+    }
+}
+
+
 
 void process_schedule(void)
 {
@@ -2319,4 +2393,5 @@ void loop(void)
     process_domotix();
     process_schedule();
     process_action();
+    process_delay();
 }
