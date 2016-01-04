@@ -139,6 +139,14 @@ void setup()
     g_openning_time = g_current_time;
     g_previous_poule_gauche_time = g_current_time;
     g_previous_poule_droite_time = g_current_time;
+    g_current_poule_gauche_time = g_current_time;
+    g_current_poule_droite_time = g_current_time;
+
+    g_poule_gauche_previous_state = 2;
+    g_poule_droite_previous_state = 2;
+    g_poule_gauche_state = 3;
+    g_poule_droite_state = 3;
+
 }
 
 
@@ -352,7 +360,7 @@ void process_poule(void)
 	    g_current_poule_droite_time = now();
 	    if (g_current_poule_droite_time > (g_previous_poule_droite_time + 240))
 	    {
-		digitalWrite(PIN_OUT_DOMOTIX_POULE_GAUCHE, g_poule_droite_state);
+		digitalWrite(PIN_OUT_DOMOTIX_POULE_DROITE, g_poule_droite_state);
 		g_previous_poule_droite_time = g_poule_droite_state;
 	    }
 	}
