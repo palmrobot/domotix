@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.10"
+#define VERSION				"v3.11"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -36,6 +36,7 @@
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
+#define PIN_POULAILLER			18 /* T */
 
 #define PIN_				10
 
@@ -208,6 +209,7 @@ state_porte_s g_entree_porte_ext; /* O */
 state_porte_s g_poulailler_porte; /* P */
 state_porte_s g_poule_gauche; /* R */
 state_porte_s g_poule_droite; /* S */
+state_porte_s g_poulailler; /* T */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	220
@@ -308,8 +310,8 @@ data_item_t g_data_item[NB_ITEM];
 #define STATE_CLASS			5
 
 
-uint16_t g_time_to_open[13]  = {0, 715 , 730 , 645 , 615 , 515 , 500 , 530 , 600 , 630 , 700 , 730 , 700};
-uint16_t g_time_to_close[13] = {0, 1800, 1810, 1830, 2000, 2030, 2100, 2030, 2000, 1930, 1900, 1745, 1730};
+uint16_t g_time_to_open[13]  = {0, 720 , 650 , 620 , 520 , 500 , 500 , 530 , 600 , 630 , 700 , 730 , 700};
+uint16_t g_time_to_close[13] = {0, 1800, 1830, 1900, 1920, 1940, 2100, 2030, 2000, 1930, 1900, 1745, 1730};
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
@@ -475,6 +477,7 @@ void setup(void)
     g_cuisine_porte_ext.old = 0;
 
     g_poulailler_porte.old = 0;
+    g_poulailler.old = 0;
     g_poule_gauche.old = 0;
     g_poule_droite.old = 0;
 
@@ -854,6 +857,11 @@ void deal_with_code(char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_poule_droite.curr],
 		strlen(ptr_code->name[g_poule_droite.curr]));
+	}break;
+	case 'T':
+	{
+	    g_client.write((uint8_t*)ptr_code->name[g_poulailler.curr],
+		strlen(ptr_code->name[g_poulailler.curr]));
 	}break;
 	default:
 
@@ -2015,7 +2023,20 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
+	g_poulailler.curr = digitalRead(PIN_POULAILLER);
+	if ((g_poulailler.curr != g_poulailler.old) || (g_init))
+	{
+	    g_poulailler.old = g_poulailler.curr;
 
+	    /* write in file  */
+	    save_entry("T.txt", g_poulailler.curr, TYPE_POULE);
+
+#ifdef DEBUG_SENSOR
+	    PgmPrint("Poulailler :");Serial.println(g_poulailler.curr);
+#endif
+
+	    wait_a_moment = 1;
+	}
 
 
 	/* ================================

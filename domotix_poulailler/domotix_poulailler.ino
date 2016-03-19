@@ -44,6 +44,10 @@ uint8_t g_process_delay;
 #define PROCESS_DELAY_OFF			0
 #define PROCESS_DELAY_ON			1
 
+#define BLOCKED_DOOR_TIMEOUT		3
+#define CLOSING_DOOR_TIMEOUT		60
+#define OPENING_DOOR_TIMEOUT		60
+
 uint8_t g_state_current;
 
 typedef void (*callback_delay) (void);
@@ -91,10 +95,11 @@ void close_the_door(void)
 
 void stop_motor(void)
 {
+    delay(400);
     digitalWrite(PIN_OUT_MOT_DIR_1, LOW);
     digitalWrite(PIN_OUT_MOT_DIR_2, LOW);
     digitalWrite(PIN_OUT_MOT_SPEED, HIGH);
-    delay(500);
+    delay(200);
     digitalWrite(PIN_OUT_MOT_SPEED, LOW);
 }
 
@@ -146,7 +151,6 @@ void setup()
     g_poule_droite_previous_state = 2;
     g_poule_gauche_state = 3;
     g_poule_droite_state = 3;
-
 }
 
 
@@ -179,7 +183,7 @@ void process_door(void)
 	    {
 		/* check if door is blocked */
 		g_current_time = now();
-		if (g_current_time > (g_openning_time + 4))
+		if (g_current_time > (g_openning_time + BLOCKED_DOOR_TIMEOUT))
 		{
 		    /* something when wrong, door is blocked */
 		    g_state_current  = STATE_CLOSED;
@@ -209,7 +213,7 @@ void process_door(void)
 	    {
 		/* check if door is blocked */
 		g_current_time = now();
-		if (g_current_time > (g_closing_time + 4))
+		if (g_current_time > (g_closing_time + BLOCKED_DOOR_TIMEOUT))
 		{
 		    /* something when wrong, door is blocked */
 		    g_state_current  = STATE_OPENED;
@@ -264,10 +268,26 @@ void process_door(void)
 	if (g_state_current == STATE_OPENNING)
 	{
 	    g_current_time = now();
-	    if (g_current_time > (g_openning_time + 60))
+	    if (g_current_time > (g_openning_time + OPENING_DOOR_TIMEOUT))
 	    {
 		/* Too long to open the door, then stop motor */
 		/* Stop immediatly */
+		g_state_current  = STATE_CLOSED;
+
+
+		/* Stop immediatly */
+		stop_motor();
+
+		/* Then send info to Domotix */
+		digitalWrite(PIN_OUT_DOMOTIX_STATE_DOOR, DOOR_CLOSED);
+	    }
+	}
+	else if (g_state_current == STATE_CLOSING)
+	{
+	    g_current_time = now();
+	    if (g_current_time > (g_closing_time + CLOSING_DOOR_TIMEOUT))
+	    {
+		/* Too long to close the door, then stop motor */
 		g_state_current  = STATE_OPENED;
 
 		/* Stop immediatly */
@@ -275,21 +295,6 @@ void process_door(void)
 
 		/* Then send info to Domotix */
 		digitalWrite(PIN_OUT_DOMOTIX_STATE_DOOR, DOOR_OPENED);
-	    }
-	}
-	else if (g_state_current == STATE_CLOSING)
-	{
-	    g_current_time = now();
-	    if (g_current_time > (g_closing_time + 60))
-	    {
-		/* Too long to close the door, then stop motor */
-		g_state_current  = STATE_CLOSED;
-
-		/* Stop immediatly */
-		stop_motor();
-
-		/* Then send info to Domotix */
-		digitalWrite(PIN_OUT_DOMOTIX_STATE_DOOR, DOOR_CLOSED);
 	    }
 	}
     }

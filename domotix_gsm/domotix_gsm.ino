@@ -75,32 +75,6 @@ uint8_t g_recv_index;
 uint8_t g_recv_crc;
 
 /********************************************************/
-/*      Key  definitions                                */
-/********************************************************/
-/* 1) "Bonjour Domotix"  => "Bonjour Name !"
- *
- * 2) "Stop les alertes" => "Les alertes sont desactivees"
- *
- * 3) "Demarre les alertes" => "Les alertes sont activees"
- */
-
-#define SMS_RESP_0				"Systeme d'envoi de SMS ready !!"
-
-#define SMS_RECV_1				"Bonjour Domotix"
-#define SMS_RESP_1_N				"Bonjour Nicolas !!"
-#define SMS_RESP_1_E				"Bonjour Estelle !!"
-
-#define SMS_RECV_2				"Stop les alertes"
-#define SMS_RESP_2				"Les envois d'alertes sont desactivees"
-
-#define SMS_RECV_3				"Demarre les alertes"
-#define SMS_RESP_3				"Les alertes sont activees"
-
-#define SMS_RECV_4				"Allume la lumiere 1"
-#define SMS_RECV_5				"Eteint la lumiere 1"
-#define SMS_RESP_4				"Alerte"
-
-/********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
 
@@ -162,9 +136,6 @@ void setup()
 {
     boolean not_connected;
 
-    /* Initialize the output pins for the DAC control. */
-
-
     /* init process states */
     g_process_recv_masterIO	= PROCESS_RECV_MASTERIO_WAIT_COMMAND;
     g_process_action		= PROCESS_ACTION_NONE;
@@ -197,7 +168,7 @@ void setup()
     }
 
     /* initialize serial communications at 115200 bps: */
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(100);
 
     /* Then send OK is ready */
@@ -213,30 +184,70 @@ void setup()
 }
 
 
-void send_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
+void send_msg_to_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
-    uint8_t crc = 42;
+    uint8_t crc;
+    uint8_t recv_crc;
+    char nb_retry;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
-    /* Send Start of transmission */
-    Serial.write(COMMAND_START);
-
-    /* Send Command  */
-    Serial.write(cmd);
-
-    /* Send Size of data */
-    Serial.write(size);
-
-    /* Write Data */
-    if ((buffer != NULL) && (size > 0))
+    nb_retry = 3;
+    do
     {
-	Serial.write(buffer, size);
-    }
+	/* Send Start of transmission */
+	Serial.write(COMMAND_START);
 
+	/* Send Command  */
+	Serial.write(cmd);
+
+	/* Send Size of data */
+	Serial.write(size);
+
+	/* Write Data */
+	if ((buffer != NULL) && (size > 0))
+	{
+	    Serial.write(buffer, size);
+
+	    /* Calcul CRC */
+	    crc = 0;
+	    for(i = 0; i < size ; i ++)
+	    {
+		crc += buffer[i];
+	    }
+	}
+	else
+	{
+	    /* arbitrary value */
+	    crc = 42;
+	}
+
+	/* Send CRC */
+	Serial.write(crc);
+
+	delay(100);
+
+	/* wait for answer */
+	while (Serial.available() < 0);
+
+	/* then read crc */
+	recv_crc = Serial.read();
+
+	nb_retry--;
+    }
+    while ((crc != recv_crc) && (nb_retry > 0));
+}
+
+void send_crc_to_masterIO(uint8_t crc)
+{
     /* Send CRC */
     Serial.write(crc);
+
+    delay(5);
+
+    /* then flush serial */
+    Serial.flush();
 }
 
 
@@ -245,8 +256,7 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
     if ((g_critical_alertes == GSM_CRITICAL_ALERTE_ON) || (force == 1))
     {
 	/* send message */
-	snprintf(g_sender_number, PHONE_NUMBER_LEN, phone_number);
-	g_gsm_sms.beginSMS(g_sender_number);
+	g_gsm_sms.beginSMS(phone_number);
 	if (strlen(message) > (CMD_DATA_MAX-1))
 	{
 	    /* then trunc it */
@@ -254,6 +264,10 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
 	}
 	g_gsm_sms.print(message);
 	g_gsm_sms.endSMS();
+	delay(500);
+
+	/* Delete message from modem memory */
+	g_gsm_sms.flush();
 	delay(500);
     }
 }
@@ -317,6 +331,8 @@ void process_recv_masterIO(void)
 		    }
 		    else
 		    {
+			g_recv_crc   = 0;
+
 			/* next state */
 			g_recv_state = CMD_STATE_CRC;
 		    }
@@ -352,8 +368,6 @@ void process_recv_masterIO(void)
 		    /* next state */
 		    g_recv_state = CMD_STATE_END;
 
-		    /* =======================> BYPASS CRC !!!!!! */
-#if 0
 		    /* check CRC */
 		    if (recv_crc != g_recv_crc)
 		    {
@@ -362,7 +376,7 @@ void process_recv_masterIO(void)
 			 */
 			g_command = 0;
 
-			/* start waiting for an other comand */
+			/* start waiting for an other command */
 			g_process_recv_masterIO = PROCESS_RECV_MASTERIO_WAIT_COMMAND;
 
 			/* restart */
@@ -373,7 +387,9 @@ void process_recv_masterIO(void)
 			/* next state */
 			g_recv_state = CMD_STATE_END;
 		    }
-#endif
+
+		    /* Send CRC to unlock sender */
+		    send_crc_to_masterIO(g_recv_crc);
 		}
 	    }break;
 	    case CMD_STATE_END:
@@ -417,49 +433,46 @@ void process_recv_gsm_sms(void)
 	    while (g_sms_recv_buffer[i-1] != 0);
 
 	    /* Check sender */
-	    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
+	    if ((strstr(g_sender_number, NICO_NUMBER) != NULL) || (strstr(g_sender_number, ESTELLE_NUMBER) != NULL))
 	    {
-		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
+		if (strcmp(g_sms_recv_buffer, "Bonjour Domotix") == 0)
 		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_1_N);
-		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
+		    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
+			snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Bonjour Nicolas !!");
+		    else
+			snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Bonjour Estelle !!");
+
+		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
 		}
-		else if (strcmp(g_sms_recv_buffer, SMS_RECV_2) == 0)
+		else if (strcmp(g_sms_recv_buffer, "Stop les alertes") == 0)
 		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_2);
-		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les envois d'alertes sont desactivees");
+		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
 
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
 
 		    g_send_to_masterIO[0] = 0;
-		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
+		    send_msg_to_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_recv_buffer, SMS_RECV_3) == 0)
+		else if (strcmp(g_sms_recv_buffer, "Demarre les alertes") == 0)
 		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_3);
-		    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les alertes sont activees");
+		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
+
 		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
 
 		    g_send_to_masterIO[0] = 1;
-		    send_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
+		    send_msg_to_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_recv_buffer, SMS_RECV_4) == 0)
+		else if (strcmp(g_sms_recv_buffer, "Allume la lumiere 1") == 0)
 		{
 		    g_send_to_masterIO[0] = 1;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
+		    send_msg_to_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
-		else if (strcmp(g_sms_recv_buffer, SMS_RECV_5) == 0)
+		else if (strcmp(g_sms_recv_buffer, "Eteint la lumiere 1") == 0)
 		{
 		    g_send_to_masterIO[0] = 0;
-		    send_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
-		}
-	    }
-	    else if (strstr(g_sender_number, ESTELLE_NUMBER) != NULL)
-	    {
-		if (strcmp(g_sms_recv_buffer, SMS_RECV_1) == 0)
-		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, SMS_RESP_1_E );
-		    send_SMS(g_sms_send_buffer, ESTELLE_NUMBER, 1);
+		    send_msg_to_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 	    }
 
@@ -491,7 +504,7 @@ void process_action(void)
 		if (g_gsm_init == GSM_INIT_OK)
 		{
 		    /*  send OK is ready */
-		    send_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
+		    send_msg_to_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
 		}
 	    }break;
 	    default:
