@@ -15,12 +15,14 @@
 #define PIN_IN_SENSOR_ACTION_MOVE	A1
 #define PIN_IN_SENSOR_PONDOIR_GAUCHE	A2  /* Grey */
 #define PIN_IN_SENSOR_PONDOIR_DROITE	A3  /* Brown */
+#define PIN_IN_SENSOR_POULAILLER	A4  /* Grey */
 
 /* domotix I/O */
 #define PIN_IN_DOMOTIX_ACTION_MOVE	11 /* Blue */
 #define PIN_OUT_DOMOTIX_STATE_DOOR	12 /* Yellow */
 #define PIN_OUT_DOMOTIX_POULE_DROITE	8  /* Brown */
 #define PIN_OUT_DOMOTIX_POULE_GAUCHE	9  /* Grey */
+#define PIN_OUT_DOMOTIX_POULAILLER	8   /*  */
 
 #define STATE_OPENNING			0
 #define STATE_OPENED			1
@@ -76,6 +78,12 @@ time_t g_current_poule_droite_time;
 time_t g_previous_poule_droite_time;
 uint8_t g_poule_droite_state;
 uint8_t g_poule_droite_previous_state;
+
+time_t g_current_poulailler_time;
+time_t g_previous_poulailler_time;
+uint8_t g_poulailler_state;
+uint8_t g_poulailler_previous_state;
+
 
 void open_the_door(void)
 {
@@ -144,13 +152,18 @@ void setup()
     g_openning_time = g_current_time;
     g_previous_poule_gauche_time = g_current_time;
     g_previous_poule_droite_time = g_current_time;
+    g_previous_poulailler_time = g_current_time;
+
     g_current_poule_gauche_time = g_current_time;
     g_current_poule_droite_time = g_current_time;
+    g_current_poulailler_time = g_current_time;
 
     g_poule_gauche_previous_state = 2;
     g_poule_droite_previous_state = 2;
+    g_poulailler_previous_state = 2;
     g_poule_gauche_state = 3;
     g_poule_droite_state = 3;
+    g_poulailler_state = 3;
 }
 
 
@@ -304,6 +317,7 @@ void process_poule(void)
 {
     uint16_t poule_gauche;
     uint16_t poule_droite;
+    uint16_t poulailler;
 
     if (g_process_poule != 0)
     {
@@ -367,6 +381,38 @@ void process_poule(void)
 	    {
 		digitalWrite(PIN_OUT_DOMOTIX_POULE_DROITE, g_poule_droite_state);
 		g_previous_poule_droite_time = g_poule_droite_state;
+	    }
+	}
+
+
+	/* convert analog read to binary state */
+	poulailler = analogRead(PIN_IN_SENSOR_POULAILLER);
+	if (poulailler > THRESHOLD_POULE)
+	{
+	    g_poulailler_state = PONDOIR_POULE;
+	}
+	else
+	{
+	    g_poulailler_state = PONDOIR_EMPTY;
+	}
+
+	/* check if it's really empty or full
+	 * wait some time and check again
+	 */
+	if (g_poulailler_previous_state != g_poulailler_state)
+	{
+	    g_poulailler_previous_state = g_poulailler_state;
+
+	    /* start counting time */
+	    g_previous_poulailler_time = now();
+	}
+	else
+	{
+	    g_current_poulailler_time = now();
+	    if (g_current_poulailler_time > (g_previous_poulailler_time + 240))
+	    {
+		digitalWrite(PIN_OUT_DOMOTIX_POULAILLER, g_poulailler_state);
+		g_previous_poulailler_time = g_poulailler_state;
 	    }
 	}
     }

@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.11"
+#define VERSION				"v3.13"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -35,8 +35,8 @@
 #define PIN_OUT_POULAILLER_ACTION	14 /* blue */
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
 #define PIN_POULE_GAUCHE		16 /* R grey */
-#define PIN_POULE_DROITE		17 /* S brown */
-#define PIN_POULAILLER			18 /* T */
+#define PIN_POULE_DROITE		18 /* S brown */
+#define PIN_POULAILLER			17 /* T */
 
 #define PIN_				10
 
@@ -309,9 +309,11 @@ data_item_t g_data_item[NB_ITEM];
 #define STATE_STATE			4
 #define STATE_CLASS			5
 
+/*                              0  , 0  , jan, jan,  fev, fev, mar, mar, avr, avr, mai, mai, jun, jun, jul, jul, aou, aou, sep, sep, oct, oct, nov, nov, dec, dec  */
+uint16_t g_time_to_open[26]  = {0  , 0  , 720, 705,  650, 635, 620, 600, 645, 620, 600, 545, 530, 530, 545, 600, 630, 600, 645, 700, 720, 735, 650, 705, 720, 735};
 
-uint16_t g_time_to_open[13]  = {0, 720 , 650 , 620 , 520 , 500 , 500 , 530 , 600 , 630 , 700 , 730 , 700};
-uint16_t g_time_to_close[13] = {0, 1800, 1830, 1900, 1920, 1940, 2100, 2030, 2000, 1930, 1900, 1745, 1730};
+/*                              0  , 0  , jan , jan , fev , fev , mar , mar , avr , avr , mai , mai , jun , jun , jul , jul , aou , aou , sep , sep , oct , oct , nov , nov , dec , dec  */
+uint16_t g_time_to_close[26] = {0  , 0  , 1800, 1820, 1840, 1900, 1930, 1955, 2110, 2130, 2145, 2200, 2215, 2230, 2205, 2150, 2140, 2120, 1955, 1930, 1900, 1840, 1820, 1800, 1800, 1800};
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
@@ -346,7 +348,7 @@ delay_t g_delay[NB_DELAY_MAX];
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			1
+#define TIMEZONE			2
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
@@ -2262,20 +2264,21 @@ void process_delay(void)
 
 void process_schedule(void)
 {
-    uint16_t time;
+    uint16_t time100;
     uint16_t date;
     uint8_t  mon;
+    uint8_t  half_month;
 
     if (g_process_schedule != PROCESS_SCHEDULE_OFF)
     {
 	/* get time values */
-	time = (100*hour()) + minute();
-	date = (100*month()) + day();
-	mon = month();
+	time100 = (100*hour()) + minute();
+	date    = day();
+	mon     = month();
 
 	/*************************************/
 	/* Scheduling for temperature sensor */
-	if ((time == 800) || (time == 1400) || (time == 2000))
+	if ((time100 == 800) || (time100 == 1400) || (time100 == 2000))
 	{
 	    if (g_sched_temperature == 0)
 	    {
@@ -2294,12 +2297,17 @@ void process_schedule(void)
 	    g_sched_temperature = 0;
 	}
 
-	if ((g_init_gsm == 0) && ((time & 0x2) == time))
+	if ((g_init_gsm == 0) && ((time100 & 0x2) == time100))
 	{
 	    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
 	}
 
-	if (time == g_time_to_open[mon])
+	if (date < 16)
+	    half_month = 0;
+	else
+	    half_month = 1;
+
+	if (time100 == g_time_to_open[2*mon + half_month])
 	{
 	    if (g_sched_door_already_opened == 0)
 	    {
@@ -2316,7 +2324,7 @@ void process_schedule(void)
 	    g_sched_door_already_opened = 0;
 	}
 
-	if (time == g_time_to_close[mon])
+	if (time100 == g_time_to_close[2*mon + half_month])
 	{
 	    if (g_sched_door_already_closed == 0)
 	    {
