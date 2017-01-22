@@ -22,6 +22,7 @@
 #define PIN_GARAGE_LUMIERE		A4 /* I */
 #define PIN_LINGERIE_LUMIERE		A5 /* J */
 #define PIN_TEMP_GARAGE		        A6 /* V */
+#define PIN_BUREAU_LUMIERE	        A7 /* X */
 
 #define PIN_GARAGE_DROITE		9 /* A */
 #define PIN_GARAGE_GAUCHE		8 /* B */
@@ -38,6 +39,8 @@
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		18 /* S brown */
 #define PIN_POULAILLER			17 /* T */
+#define PIN_BUREAU_FENETRE		19 /* W */
+#define PIN_BUREAU_PORTE		20 /* Q */
 
 #define PIN_				10
 
