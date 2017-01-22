@@ -10,17 +10,18 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.13"
+#define VERSION				"v3.20"
 
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
-#define PIN_A0				A0
+#define PIN_TEMP_EXT_OFFSET		A0 /* U */
 #define PIN_GARAGE_LUMIERE_ETABLI	A1 /* D */
 #define PIN_CELLIER_LUMIERE		A2 /* G */
 #define PIN_TEMP_EXT			A3 /* M */
 #define PIN_GARAGE_LUMIERE		A4 /* I */
 #define PIN_LINGERIE_LUMIERE		A5 /* J */
+#define PIN_TEMP_GARAGE		        A6 /* V */
 
 #define PIN_GARAGE_DROITE		9 /* A */
 #define PIN_GARAGE_GAUCHE		8 /* B */
@@ -203,13 +204,14 @@ state_lumiere_s g_garage_lumiere; /* I */
 state_lumiere_s g_lingerie_lumiere; /* J */
 state_porte_s g_lingerie_porte_cuisine; /* K */
 state_porte_s g_cuisine_porte_ext; /* L */
-state_lumiere_s g_temperature_ext; /* M */
+state_lumiere_s g_temperature_ext; /* M & U */
 state_porte_s g_lingerie_fenetre; /* N */
 state_porte_s g_entree_porte_ext; /* O */
 state_porte_s g_poulailler_porte; /* P */
 state_porte_s g_poule_gauche; /* R */
 state_porte_s g_poule_droite; /* S */
 state_porte_s g_poulailler; /* T */
+state_lumiere_s g_temperature_garage; /* V */
 
 #define THRESHOLD_CMP_OLD	10
 #define THRESHOLD_LIGHT_ON	220
@@ -484,6 +486,7 @@ void setup(void)
     g_poule_droite.old = 0;
 
     g_temperature_ext.old = 0;
+    g_temperature_garage.old = 0;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -864,6 +867,10 @@ void deal_with_code(char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_poulailler.curr],
 		strlen(ptr_code->name[g_poulailler.curr]));
+	}break;
+	case 'V':
+	{
+	    g_client.print(g_temperature_garage.curr);
 	}break;
 	default:
 
@@ -1777,6 +1784,7 @@ void process_domotix(void)
 {
     uint8_t wait_a_moment;
     int value;
+    int value_offset;
 
     /* save current date and clock in global var */
     digitalClock();
@@ -2177,14 +2185,19 @@ void process_domotix(void)
 	 * =================================
 	 */
 
-	value = analogRead(PIN_TEMP_EXT);
-	g_temperature_ext.curr = (500.0 * value) / 1024;
+	value     = analogRead(PIN_TEMP_GARAGE);
+	g_temperature_garage.curr = (500.0 * value) / 1024;
+
+	value     = analogRead(PIN_TEMP_EXT);
+	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
+	g_temperature_ext.curr = (500.0 * (value - value_offset)) / 1024;
 
 	if (wait_a_moment)
 	{
 	    /* wait some time, before testing the next time the inputs */
 	    delay(500);
 	}
+	delay(10);
 
 	/* reset state of init */
 	g_init = 0;
