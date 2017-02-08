@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.20"
+#define VERSION				"v3.21"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -37,12 +37,10 @@
 #define PIN_OUT_POULAILLER_ACTION	14 /* blue */
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
 #define PIN_POULE_GAUCHE		16 /* R grey */
-#define PIN_POULE_DROITE		18 /* S brown */
-#define PIN_POULAILLER			17 /* T */
-#define PIN_BUREAU_FENETRE		19 /* W */
-#define PIN_BUREAU_PORTE		20 /* Q */
-
-#define PIN_				10
+#define PIN_POULE_DROITE		17 /* S brown */
+#define PIN_POULAILLER_HALL		20 /* T */
+#define PIN_BUREAU_PORTE		21 /* Q */
+#define PIN_BUREAU_FENETRE		29 /* W */
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			40
@@ -57,11 +55,9 @@
 #define PIN_ETHER_CTRL2			51
 #define PIN_ETHER_CTRL3			52
 #define PIN_ETHER_SELECT		53
-
-
-#define LIGHT_OFF			1
-#define LIGHT_ON			0
-
+#define PIN_UNUSED			10
+#define PIN_UNUSED			18
+#define PIN_UNUSED			19
 
 /********************************************************/
 /*      State  GSM definitions                          */
@@ -216,8 +212,12 @@ state_porte_s g_poule_droite; /* S */
 state_porte_s g_poulailler; /* T */
 state_lumiere_s g_temperature_garage; /* V */
 
-#define THRESHOLD_CMP_OLD	10
-#define THRESHOLD_LIGHT_ON	220
+#define THRESHOLD_CMP_OLD		10
+#define THRESHOLD_LIGHT_ON		220
+
+#define LIGHT_OFF			1
+#define LIGHT_ON			0
+
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
@@ -237,6 +237,11 @@ uint8_t g_sched_door_already_closed = 0;
 /********************************************************/
 uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x00, 0xFF, 0x86};
 uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
+
+EthernetServer g_server(9090);
+EthernetClient g_client;
+uint8_t g_remoteIP[] = {0, 0, 0, 0};
+//g_client.getRemoteIP(g_remoteIP); // where rip is defined as byte rip[] = {0,0,0,0 };
 
 #define LINE_MAX_LEN			64
 char g_line[LINE_MAX_LEN + 1];
@@ -320,9 +325,6 @@ uint16_t g_time_to_open[26]  = {0  , 0  , 720, 705,  650, 635, 620, 600, 645, 62
 /*                              0  , 0  , jan , jan , fev , fev , mar , mar , avr , avr , mai , mai , jun , jun , jul , jul , aou , aou , sep , sep , oct , oct , nov , nov , dec , dec  */
 uint16_t g_time_to_close[26] = {0  , 0  , 1800, 1820, 1840, 1900, 1930, 1955, 2110, 2130, 2145, 2200, 2215, 2230, 2205, 2150, 2140, 2120, 1955, 1930, 1900, 1840, 1820, 1800, 1800, 1800};
 
-EthernetServer g_server(9090);
-EthernetClient g_client;
-
 #define WEB_GET			1
 #define WEB_EOL			2
 #define WEB_END			4
@@ -396,6 +398,9 @@ void setup(void)
     pinMode(PIN_POULAILLER_PORTE, INPUT);
     pinMode(PIN_POULE_GAUCHE, INPUT);
     pinMode(PIN_POULE_DROITE, INPUT);
+    pinMode(PIN_POULAILLER_HALL, INPUT);
+    pinMode(PIN_BUREAU_PORTE, INPUT);
+    pinMode(PIN_BUREAU_FENETRE, INPUT);
 
     /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
@@ -683,6 +688,7 @@ void deal_with_file(char item, char type, char code)
 void deal_with_code(char item, char type, char code)
 {
     code_t *ptr_code;
+    char ipaddr[16];
 
     switch (code)
     {
@@ -745,6 +751,10 @@ void deal_with_code(char item, char type, char code)
 		g_client.print("  ");
 		g_client.print(g_date);
 	    }
+	    /* g_client.print("</br>Connection from :"); */
+	    /* sprintf(ipaddr,"%02d.%02d.%02d.%02d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]); */
+	    /* g_client.print(ipaddr); */
+	    /* g_client.print("</br>"); */
 
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
@@ -1296,6 +1306,8 @@ void process_ethernet(void)
 	    g_page_web  = 0;
 	    g_req_count = 0;
 	    exit = 0;
+	    /* Get remote IP */
+	    g_client.getRemoteIP(g_remoteIP);
 
 	    while (g_client.connected() && (exit == 0))
 	    {
@@ -2036,7 +2048,7 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
-	g_poulailler.curr = digitalRead(PIN_POULAILLER);
+	g_poulailler.curr = digitalRead(PIN_POULAILLER_HALL);
 	if ((g_poulailler.curr != g_poulailler.old) || (g_init))
 	{
 	    g_poulailler.old = g_poulailler.curr;
@@ -2126,7 +2138,7 @@ void process_domotix(void)
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
 
-	    if (g_garage_lumiere.curr > THRESHOLD_LIGHT_ON)
+	    if (g_garage_lumiere.curr > (THRESHOLD_LIGHT_ON-50))
 	    {
 		g_garage_lumiere.state_curr = 0;
 	    }
@@ -2193,7 +2205,7 @@ void process_domotix(void)
 
 	value     = analogRead(PIN_TEMP_EXT);
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
-	g_temperature_ext.curr = (500.0 * (value - value_offset)) / 1024;
+	g_temperature_ext.curr = ((500.0 * (value - value_offset)) / 1024) - 2;
 
 	if (wait_a_moment)
 	{
