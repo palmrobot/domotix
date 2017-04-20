@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.21"
+#define VERSION				"v3.23"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -23,6 +23,7 @@
 #define PIN_LINGERIE_LUMIERE		A5 /* J */
 #define PIN_TEMP_GARAGE		        A6 /* V */
 #define PIN_BUREAU_LUMIERE	        A7 /* X */
+#define PIN_EDF         		A8
 
 #define PIN_GARAGE_DROITE		9 /* A */
 #define PIN_GARAGE_GAUCHE		8 /* B */
@@ -38,12 +39,12 @@
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
-#define PIN_POULAILLER_HALL		20 /* T */
 #define PIN_BUREAU_PORTE		21 /* Q */
 #define PIN_BUREAU_FENETRE		29 /* W */
+#define PIN_POULAILLER_HALL		28 /* T */
 
 #define PIN_OUT_GSM_INIT		36
-#define PIN_OUT_LIGHT_1			40
+#define PIN_OUT_LIGHT_1			37
 
 
 #define PIN_SS_ETH_CONTROLLER 		50
@@ -157,7 +158,7 @@ uint8_t g_process_schedule;
 #define PROCESS_SCHEDULE_OFF			0
 #define PROCESS_SCHEDULE_ON			1
 
-uint8_t g_process_action;
+volatile uint8_t g_process_action;
 #define PROCESS_ACTION_NONE			0
 #define PROCESS_ACTION_GSM_INIT_OK		GSM_IO_COMMAND_INIT_OK
 #define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
@@ -211,12 +212,13 @@ state_porte_s g_poule_gauche; /* R */
 state_porte_s g_poule_droite; /* S */
 state_porte_s g_poulailler; /* T */
 state_lumiere_s g_temperature_garage; /* V */
+state_lumiere_s g_edf;
 
 #define THRESHOLD_CMP_OLD		10
 #define THRESHOLD_LIGHT_ON		220
 
-#define LIGHT_OFF			1
-#define LIGHT_ON			0
+#define LIGHT_OFF			0
+#define LIGHT_ON			1
 
 
 uint16_t g_req_count = 0;
@@ -351,11 +353,14 @@ typedef struct
 #define NB_DELAY_MAX			10
 delay_t g_delay[NB_DELAY_MAX];
 
+volatile uint16_t g_counter_edf;
+volatile uint8_t  g_counter_edge;
+
 /********************************************************/
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			2
+#define TIMEZONE			1
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
@@ -376,6 +381,15 @@ uint8_t g_NTP = 0;
 /********************************************************/
 
 
+/********************************************************/
+/*      Interrupt		                        */
+/********************************************************/
+void interrupt_led_counter(void)
+{
+    g_counter_edf++;
+    g_counter_edge = !g_counter_edge;
+    g_process_action = PROCESS_ACTION_LIGHT_1;
+}
 
 /********************************************************/
 /*      Init			                        */
@@ -408,7 +422,7 @@ void setup(void)
     pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
 
     digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
-    digitalWrite(PIN_OUT_GSM_INIT, 0);
+    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 
     /* init Process */
@@ -495,6 +509,7 @@ void setup(void)
 
     g_temperature_ext.old = 0;
     g_temperature_garage.old = 0;
+    g_edf.old = 0;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -849,7 +864,7 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'M':
 	{
-	    g_client.print(g_temperature_ext.curr);
+	    g_client.print(g_temperature_ext.curr);g_client.print(g_edf.curr);
 	}break;
 	case 'N':
 	{
@@ -2190,6 +2205,29 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
+	g_edf.curr = analogRead(PIN_EDF);
+	if ( (g_init) || (g_edf.curr > (g_edf.old + 10)) ||
+	    ((g_edf.curr + 10) < g_edf.old))
+	{
+	    g_edf.old = g_edf.curr;
+
+	    if (g_edf.curr > 10)
+	    {
+		g_edf.state_curr = 1;
+		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
+	    }
+	    else
+	    {
+		g_edf.state_curr = 0;
+		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+	    }
+
+	    if ((g_edf.state_curr != g_edf.state_old) || (g_init))
+	    {
+		g_edf.state_old = g_edf.state_curr;
+	    }
+	}
+
 	/* ================================
 	 *
 	 *
@@ -2212,7 +2250,6 @@ void process_domotix(void)
 	    /* wait some time, before testing the next time the inputs */
 	    delay(500);
 	}
-	delay(10);
 
 	/* reset state of init */
 	g_init = 0;
