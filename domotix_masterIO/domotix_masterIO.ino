@@ -40,10 +40,11 @@
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
 #define PIN_BUREAU_PORTE		21 /* Q */
-#define PIN_BUREAU_FENETRE		29 /* W */
+#define PIN_BUREAU_FENETRE		29 /* a */
 #define PIN_POULAILLER_HALL		28 /* T */
-					   /* W */
-					   /* Y */
+/* EDF HC */				   /* W */
+/* EDF HP */				   /* Y */
+/* ADDR IP */				   /* Z */
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			37
@@ -182,6 +183,7 @@ typedef struct state_lumiere_s
     int curr;
     int state_old;
     int state_curr;
+    int value;
 };
 
 state_porte_s g_garage_droite; /* A */
@@ -512,7 +514,9 @@ void setup(void)
     g_temperature_ext.old = 0;
     g_temperature_garage.old = 0;
     g_edf_hc.old = 0;
+    g_edf_hc.value = 0;
     g_edf_hp.old = 0;
+    g_edf_hp.value = 0;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -897,15 +901,15 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'W':
 	{
-	    g_client.print(g_edf_hc.curr);
+	    g_client.print(g_edf_hc.value);
 	}break;
 	case 'Y':
 	{
-	    g_client.print(g_edf_hp.curr);
+	    g_client.print(g_edf_hp.value);
 	}break;
 	case 'Z':
 	{
-	    sprintf(ipaddr,"%02d.%02d.%02d.%02d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]);
+	    sprintf(ipaddr,"%d.%d.%d.%d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]);
 	    g_client.print(ipaddr);
 	}break;
 	default:
@@ -2277,6 +2281,7 @@ void process_domotix_quick(void)
 	    if (edf->curr > 8)
 	    {
 		edf->state_curr = 1;
+		edf->value++;
 		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
 	    }
 	    else
