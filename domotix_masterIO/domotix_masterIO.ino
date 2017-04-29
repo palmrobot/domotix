@@ -10,7 +10,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.23"
+#define VERSION				"v3.24"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -42,6 +42,8 @@
 #define PIN_BUREAU_PORTE		21 /* Q */
 #define PIN_BUREAU_FENETRE		29 /* W */
 #define PIN_POULAILLER_HALL		28 /* T */
+					   /* W */
+					   /* Y */
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			37
@@ -136,30 +138,22 @@ uint8_t g_recv_crc;
 /********************************************************/
 /*      Process definitions                             */
 /********************************************************/
+#define PROCESS_OFF			0
+#define PROCESS_ON			1
+
 #ifdef DEBUG
 uint8_t g_process_serial;
-#define PROCESS_SERIAL_OFF			0
-#define PROCESS_SERIAL_ON			1
-#endif
+#endif /* DEBUG */
 
 uint8_t g_process_ethernet;
-#define PROCESS_ETHERNET_OFF			0
-#define PROCESS_ETHERNET_ON			1
-
 uint8_t g_process_domotix;
-#define PROCESS_DOMOTIX_OFF			0
-#define PROCESS_DOMOTIX_ON			1
-
+uint8_t g_process_domotix_quick;
 uint8_t g_process_time;
-#define PROCESS_TIME_OFF			0
-#define PROCESS_TIME_ON				1
-
 uint8_t g_process_schedule;
-#define PROCESS_SCHEDULE_OFF			0
-#define PROCESS_SCHEDULE_ON			1
+uint8_t g_process_delay;
 
 volatile uint8_t g_process_action;
-#define PROCESS_ACTION_NONE			0
+#define PROCESS_ACTION_NONE			PROCESS_OFF
 #define PROCESS_ACTION_GSM_INIT_OK		GSM_IO_COMMAND_INIT_OK
 #define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
 #define PROCESS_ACTION_LIGHT_1			GSM_IO_COMMAND_LIGHT_1
@@ -169,9 +163,7 @@ uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_DO_NOTHING		0
 #define PROCESS_RECV_GSM_WAIT_COMMAND		1
 
-uint8_t g_process_delay;
-#define PROCESS_DELAY_OFF			0
-#define PROCESS_DELAY_ON			1
+
 
 /********************************************************/
 /*      Global definitions                              */
@@ -212,14 +204,15 @@ state_porte_s g_poule_gauche; /* R */
 state_porte_s g_poule_droite; /* S */
 state_porte_s g_poulailler; /* T */
 state_lumiere_s g_temperature_garage; /* V */
-state_lumiere_s g_edf;
+state_lumiere_s g_edf_hc; /* W */
+state_lumiere_s g_edf_hp; /* Y */
+			  /* Z */
 
 #define THRESHOLD_CMP_OLD		10
 #define THRESHOLD_LIGHT_ON		220
 
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
-
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
@@ -338,6 +331,7 @@ file_web_t g_filename;
 char  g_clock[9];
 char  g_date[9];
 uint8_t g_init = 0;
+uint8_t g_init_quick = 0;
 uint8_t g_init_gsm = 0;
 
 typedef void (*callback_delay) (void);
@@ -346,21 +340,19 @@ typedef struct
 {
     uint32_t delay_start;
     uint32_t delay_wait;
-    uint8_t  delay_inuse;
     callback_delay cb;
+    uint8_t  delay_inuse;
+    uint8_t  *process;
 }delay_t;
 
 #define NB_DELAY_MAX			10
 delay_t g_delay[NB_DELAY_MAX];
 
-volatile uint16_t g_counter_edf;
-volatile uint8_t  g_counter_edge;
-
 /********************************************************/
 /*      NTP			                        */
 /********************************************************/
 
-#define TIMEZONE			1
+#define TIMEZONE			2
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
 #define TIME_SYNCHRO_SEC		200
@@ -375,6 +367,19 @@ time_t prevDisplay = 0;
 byte g_packetBuffer[NTP_PACKET_SIZE];
 uint8_t g_NTP = 0;
 
+/* date & time */
+uint8_t g_hour = 0;
+uint8_t g_min  = 0;
+uint16_t g_hour100 = 0;
+uint8_t g_sec  = 0;
+uint8_t g_day  = 0;
+uint8_t g_mon  = 0;
+uint16_t g_year = 0;
+
+/********************************************************/
+/*      FUNCTION		                        */
+/********************************************************/
+void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_delay call_after_delay);
 
 /********************************************************/
 /*      CONSTANT STRING		                        */
@@ -384,12 +389,7 @@ uint8_t g_NTP = 0;
 /********************************************************/
 /*      Interrupt		                        */
 /********************************************************/
-void interrupt_led_counter(void)
-{
-    g_counter_edf++;
-    g_counter_edge = !g_counter_edge;
-    g_process_action = PROCESS_ACTION_LIGHT_1;
-}
+
 
 /********************************************************/
 /*      Init			                        */
@@ -427,14 +427,15 @@ void setup(void)
 
     /* init Process */
 #ifdef DEBUG
-    g_process_serial   = PROCESS_SERIAL_ON;
+    g_process_serial   = PROCESS_ON;
 #endif
 
-    g_process_ethernet = PROCESS_ETHERNET_ON;
-    g_process_domotix  = PROCESS_DOMOTIX_ON;
-    g_process_time     = PROCESS_TIME_OFF;
-    g_process_delay    = PROCESS_DELAY_OFF;
-    g_process_schedule = PROCESS_SCHEDULE_ON;
+    g_process_ethernet = PROCESS_ON;
+    g_process_domotix  = PROCESS_ON;
+    g_process_domotix_quick  = PROCESS_ON;
+    g_process_time     = PROCESS_ON;
+    g_process_delay    = PROCESS_ON;
+    g_process_schedule = PROCESS_ON;
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
 
@@ -467,6 +468,7 @@ void setup(void)
     g_debug = 0;
     g_NTP   = 0;
     g_init  = 1;
+    g_init_quick = 1;
     g_init_gsm = 0;
     g_recv_state = CMD_STATE_START;
     g_recv_size = 0;
@@ -509,7 +511,8 @@ void setup(void)
 
     g_temperature_ext.old = 0;
     g_temperature_garage.old = 0;
-    g_edf.old = 0;
+    g_edf_hc.old = 0;
+    g_edf_hp.old = 0;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -757,20 +760,12 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'z':
 	{
-	    /* save current date and clock in global var */
-	    digitalClock();
-	    digitalDate();
 	    if (g_NTP)
 	    {
 		g_client.print(g_clock);
 		g_client.print("  ");
 		g_client.print(g_date);
 	    }
-	    /* g_client.print("</br>Connection from :"); */
-	    /* sprintf(ipaddr,"%02d.%02d.%02d.%02d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]); */
-	    /* g_client.print(ipaddr); */
-	    /* g_client.print("</br>"); */
-
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
 	}break;
@@ -864,7 +859,7 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'M':
 	{
-	    g_client.print(g_temperature_ext.curr);g_client.print(g_edf.curr);
+	    g_client.print(g_temperature_ext.curr);
 	}break;
 	case 'N':
 	{
@@ -899,6 +894,19 @@ void deal_with_code(char item, char type, char code)
 	case 'V':
 	{
 	    g_client.print(g_temperature_garage.curr);
+	}break;
+	case 'W':
+	{
+	    g_client.print(g_edf_hc.curr);
+	}break;
+	case 'Y':
+	{
+	    g_client.print(g_edf_hp.curr);
+	}break;
+	case 'Z':
+	{
+	    sprintf(ipaddr,"%02d.%02d.%02d.%02d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]);
+	    g_client.print(ipaddr);
 	}break;
 	default:
 
@@ -1053,12 +1061,12 @@ void digitalClockDisplaySerial(void)
 
 void digitalClock(void)
 {
-    sprintf(g_clock,"%02d:%02d:%02d",hour(), minute(), second());
+    sprintf(g_clock,"%02d:%02d:%02d",g_hour, g_min, g_sec);
 }
 
 void digitalDate(void)
 {
-    sprintf(g_date,"%02d/%02d/%02d",day(), month(), year()-2000);
+    sprintf(g_date,"%02d/%02d/%02d",g_day, g_mon, g_year-2000);
 }
 
 time_t getNtpTime(void)
@@ -1144,7 +1152,7 @@ void process_serial(void)
     uint16_t count;
     uint8_t command;
 
-    if (g_process_serial != PROCESS_SERIAL_OFF)
+    if (g_process_serial != PROCESS_OFF)
     {
 	/* if we get a valid byte, read analog ins: */
 	count = Serial.available();
@@ -1310,7 +1318,7 @@ void process_ethernet(void)
     char eat_req;
     int exit;
 
-    if (g_process_ethernet != PROCESS_ETHERNET_OFF)
+    if (g_process_ethernet != PROCESS_OFF)
     {
 	g_client = g_server.available();
 	if (g_client)
@@ -1407,42 +1415,55 @@ void process_ethernet(void)
 
 		    if (g_filename.fd.available())
 		    {
-			/* send 200 OK */
-			PgmClientPrintln("HTTP/1.1 200 OK");
-
-			if (strstr(g_filename.name, ".htm") != NULL)
+			if ((strstr(g_filename.name, "config.htm") != NULL) &&
+			    (g_remoteIP[0] != 192) &&
+			    (g_remoteIP[1] != 168) &&
+			    (g_remoteIP[2] != 5))
 			{
+			    PgmClientPrintln("HTTP/1.1 404 Not Authorized");
 			    PgmClientPrintln("Content-Type: text/html");
-
-			    /* end of header */
 			    g_client.println();
-			    send_file_to_client(&g_filename.fd);
-			    g_filename.fd.close();
+			    PgmClientPrintln("<h2>Domotix Error: You are not allowed to open this page!</h2>");
 			}
 			else
 			{
-			    if (strstr(g_filename.name, ".css") != NULL)
+			    /* send 200 OK */
+			    PgmClientPrintln("HTTP/1.1 200 OK");
+
+			    if (strstr(g_filename.name, ".htm") != NULL)
 			    {
-				PgmClientPrintln("Content-Type: text/css");
-			    }
-			    else if (strstr(g_filename.name, ".jpg") != NULL)
-			    {
-				PgmClientPrintln("Content-Type: image/jpeg");
-				PgmClientPrintln("Cache-Control: max-age=2592000");
-			    }
-			    else if (strstr(g_filename.name, ".ico") != NULL)
-			    {
-				PgmClientPrintln("Content-Type: image/x-icon");
-				PgmClientPrintln("Cache-Control: max-age=2592000");
+				PgmClientPrintln("Content-Type: text/html");
+
+				/* end of header */
+				g_client.println();
+				send_file_to_client(&g_filename.fd);
+				g_filename.fd.close();
 			    }
 			    else
-				PgmClientPrintln("Content-Type: text");
+			    {
+				if (strstr(g_filename.name, ".css") != NULL)
+				{
+				    PgmClientPrintln("Content-Type: text/css");
+				}
+				else if (strstr(g_filename.name, ".jpg") != NULL)
+				{
+				    PgmClientPrintln("Content-Type: image/jpeg");
+				    PgmClientPrintln("Cache-Control: max-age=2592000");
+				}
+				else if (strstr(g_filename.name, ".ico") != NULL)
+				{
+				    PgmClientPrintln("Content-Type: image/x-icon");
+				    PgmClientPrintln("Cache-Control: max-age=2592000");
+				}
+				else
+				    PgmClientPrintln("Content-Type: text");
 
-			    /* end of header */
-			    g_client.println();
+				/* end of header */
+				g_client.println();
 
-			    send_resp_to_client(&g_filename.fd);
-			    g_filename.fd.close();
+				send_resp_to_client(&g_filename.fd);
+				g_filename.fd.close();
+			    }
 			}
 		    }
 		    else
@@ -1816,12 +1837,8 @@ void process_domotix(void)
     int value;
     int value_offset;
 
-    /* save current date and clock in global var */
-    digitalClock();
-    digitalDate();
-
     wait_a_moment = 0;
-    if (g_process_domotix != PROCESS_DOMOTIX_OFF)
+    if (g_process_domotix != PROCESS_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
 	if ((g_garage_droite.curr != g_garage_droite.old) || (g_init))
@@ -2205,29 +2222,6 @@ void process_domotix(void)
 	    wait_a_moment = 1;
 	}
 
-	g_edf.curr = analogRead(PIN_EDF);
-	if ( (g_init) || (g_edf.curr > (g_edf.old + 10)) ||
-	    ((g_edf.curr + 10) < g_edf.old))
-	{
-	    g_edf.old = g_edf.curr;
-
-	    if (g_edf.curr > 10)
-	    {
-		g_edf.state_curr = 1;
-		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
-	    }
-	    else
-	    {
-		g_edf.state_curr = 0;
-		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
-	    }
-
-	    if ((g_edf.state_curr != g_edf.state_old) || (g_init))
-	    {
-		g_edf.state_old = g_edf.state_curr;
-	    }
-	}
-
 	/* ================================
 	 *
 	 *
@@ -2248,7 +2242,7 @@ void process_domotix(void)
 	if (wait_a_moment)
 	{
 	    /* wait some time, before testing the next time the inputs */
-	    delay(500);
+	    wait_some_time(&g_process_domotix, 500, NULL);
 	}
 
 	/* reset state of init */
@@ -2256,28 +2250,72 @@ void process_domotix(void)
     }
 }
 
-
-void process_time(void)
+void process_domotix_quick(void)
 {
-    time_t  curr_time;
+    state_lumiere_s *edf;
 
-    if (g_process_time != PROCESS_TIME_OFF)
+    if (g_process_domotix_quick != PROCESS_OFF)
     {
-	/* if (timeStatus() != timeNotSet) */
-	/* { */
-	/*     curr_time = now(); */
-	/*     if (curr_time != g_prevDisplay) */
-	/*     { */
-	/* 	g_prevDisplay = curr_time; */
-	/* 	digitalClockDisplay(); */
-	/*     } */
-	/* } */
+
+	/* heure creuse ? */
+	if (((g_hour100 > 200) && (g_hour100 < 700)) ||
+	    ((g_hour100 > 1400) && (g_hour100 < 1700)))
+	{
+	    edf = &g_edf_hc;
+	}
+	else
+	{
+	    edf = &g_edf_hp;
+	}
+
+	edf->curr = analogRead(PIN_EDF);
+	if ( (g_init_quick) || (edf->curr > (edf->old + 8)) ||
+	    ((edf->curr + 8) < edf->old))
+	{
+	    edf->old = edf->curr;
+
+	    if (edf->curr > 8)
+	    {
+		edf->state_curr = 1;
+		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
+	    }
+	    else
+	    {
+		edf->state_curr = 0;
+		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+	    }
+
+	    if ((edf->state_curr != edf->state_old) || (g_init_quick))
+	    {
+		edf->state_old = edf->state_curr;
+	    }
+	}
+
+	/* reset state of init */
+	g_init_quick = 0;
     }
 }
 
-void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay);
 
-void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay)
+void process_time(void)
+{
+    if (g_process_time != PROCESS_OFF)
+    {
+	g_hour = hour();
+	g_min  = minute();
+	g_hour100 = (100*g_hour + g_min);
+	g_sec  = second();
+	g_day  = day();
+	g_mon  = month();
+	g_year = year();
+
+	/* save current date and clock in global string var */
+	digitalClock();
+	digitalDate();
+    }
+}
+
+void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_delay call_after_delay)
 {
     uint32_t current_millis;
     uint8_t index;
@@ -2287,6 +2325,8 @@ void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay
 	if (g_delay[index].delay_inuse == 0)
 	{
 	    current_millis = millis();
+	    *process = PROCESS_OFF;
+	    g_delay[index].process      = process;
 	    g_delay[index].delay_start  = current_millis;
 	    g_delay[index].cb		= call_after_delay;
 	    g_delay[index].delay_inuse  = 1;
@@ -2294,7 +2334,7 @@ void wait_some_time( unsigned long time_to_wait, callback_delay call_after_delay
 	}
     }
 
-    /* no more delay in tab availble
+    /* no more delay in tab available
      */
     delay(time_to_wait);
 }
@@ -2305,7 +2345,7 @@ void process_delay(void)
     uint32_t current_millis;
     uint8_t index;
 
-    if (g_process_delay != PROCESS_DELAY_OFF)
+    if (g_process_delay != PROCESS_OFF)
     {
 	for(index = 0; index < NB_DELAY_MAX; index++)
 	{
@@ -2316,9 +2356,12 @@ void process_delay(void)
 		{
 		    /* call CB
 		     */
-		    g_delay[index].cb();
+		    if (g_delay[index].cb != NULL)
+		    {
+			g_delay[index].cb();
+		    }
+		    *(g_delay[index].process) = PROCESS_ON;
 		    g_delay[index].delay_inuse = 0;
-		    return;
 		}
 	    }
 	}
@@ -2329,29 +2372,17 @@ void process_delay(void)
 
 void process_schedule(void)
 {
-    uint16_t time100;
-    uint16_t date;
-    uint8_t  mon;
     uint8_t  half_month;
 
-    if (g_process_schedule != PROCESS_SCHEDULE_OFF)
+    if (g_process_schedule != PROCESS_OFF)
     {
-	/* get time values */
-	time100 = (100*hour()) + minute();
-	date    = day();
-	mon     = month();
-
 	/*************************************/
 	/* Scheduling for temperature sensor */
-	if ((time100 == 800) || (time100 == 1400) || (time100 == 2000))
+	if ((g_hour100 == 800) || (g_hour100 == 1400) || (g_hour100 == 2000))
 	{
 	    if (g_sched_temperature == 0)
 	    {
 		g_sched_temperature = 1;
-
-		/* save current date and clock in global var */
-		digitalClock();
-		digitalDate();
 
 		/* write in file  */
 		save_entry_temp("M.txt", g_temperature_ext.curr);
@@ -2362,17 +2393,20 @@ void process_schedule(void)
 	    g_sched_temperature = 0;
 	}
 
-	if ((g_init_gsm == 0) && ((time100 & 0x2) == time100))
+	/* check every 2 hours if GSM is init */
+	/*if ((g_init_gsm == 0) && ((g_hour100 & 0x2) == g_hour100))
 	{
 	    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
 	}
+	*/
 
-	if (date < 16)
+	/* check if door must be opened or closed */
+	if (g_day < 16)
 	    half_month = 0;
 	else
 	    half_month = 1;
 
-	if (time100 == g_time_to_open[2*mon + half_month])
+	if (g_hour100 == g_time_to_open[2*g_mon + half_month])
 	{
 	    if (g_sched_door_already_opened == 0)
 	    {
@@ -2389,7 +2423,7 @@ void process_schedule(void)
 	    g_sched_door_already_opened = 0;
 	}
 
-	if (time100 == g_time_to_close[2*mon + half_month])
+	if (g_hour100 == g_time_to_close[2*g_mon + half_month])
 	{
 	    if (g_sched_door_already_closed == 0)
 	    {
@@ -2478,13 +2512,14 @@ void process_action(void)
 
 void loop(void)
 {
+    process_time();
     process_ethernet();
 #ifdef DEBUG
     process_serial();
 #endif
     process_recv_gsm();
-    process_time();
     process_domotix();
+    process_domotix_quick();
     process_schedule();
     process_action();
     process_delay();
