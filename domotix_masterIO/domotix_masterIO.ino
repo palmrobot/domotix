@@ -3,6 +3,7 @@
 #include <Time.h>
 #include <SD.h>
 #include <Ethernet.h>
+#include <EEPROM.h>
 
 /* #define DEBUG */
 /* #define DEBUG_HTML */
@@ -10,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.24"
+#define VERSION				"v3.25"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -45,10 +46,19 @@
 /* EDF HC */				   /* W */
 /* EDF HP */				   /* Y */
 /* ADDR IP */				   /* Z */
+/* lampe1 */				   /* b */
+/* lampe2 */				   /* c */
+/* lampe3 */				   /* d */
+/* lampe4 */				   /* e */
+/* hc */				   /* f */
+/* hp */				   /* g */
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			37
-
+#define PIN_OUT_LAMPE_1			38
+#define PIN_OUT_LAMPE_2			39
+#define PIN_OUT_LAMPE_3			40
+#define PIN_OUT_LAMPE_4			41
 
 #define PIN_SS_ETH_CONTROLLER 		50
 
@@ -159,11 +169,15 @@ volatile uint8_t g_process_action;
 #define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
 #define PROCESS_ACTION_LIGHT_1			GSM_IO_COMMAND_LIGHT_1
 #define PROCESS_ACTION_CRITICAL_TIME		GSM_IO_COMMAND_CRITICAL_TIME
+#define PROCESS_ACTION_LAMPE_1			0x61
+#define PROCESS_ACTION_LAMPE_2			0x62
+#define PROCESS_ACTION_LAMPE_3			0x63
+#define PROCESS_ACTION_LAMPE_4			0x64
+#define PROCESS_ACTION_EDF			0x65
 
 uint8_t g_process_recv_gsm;
-#define PROCESS_RECV_GSM_DO_NOTHING		0
-#define PROCESS_RECV_GSM_WAIT_COMMAND		1
-
+#define PROCESS_RECV_GSM_DO_NOTHING		PROCESS_OFF
+#define PROCESS_RECV_GSM_WAIT_COMMAND		PROCESS_ON
 
 
 /********************************************************/
@@ -208,7 +222,6 @@ state_porte_s g_poulailler; /* T */
 state_lumiere_s g_temperature_garage; /* V */
 state_lumiere_s g_edf_hc; /* W */
 state_lumiere_s g_edf_hp; /* Y */
-			  /* Z */
 
 #define THRESHOLD_CMP_OLD		10
 #define THRESHOLD_LIGHT_ON		220
@@ -223,7 +236,12 @@ uint8_t g_critical_time = 0;
 uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
 uint8_t g_sched_door_already_closed = 0;
+uint8_t g_sched_edf = 0;
 
+uint8_t g_lampe1 = LIGHT_OFF;
+uint8_t g_lampe2 = LIGHT_OFF;
+uint8_t g_lampe3 = LIGHT_OFF;
+uint8_t g_lampe4 = LIGHT_OFF;
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -274,6 +292,7 @@ typedef struct
 #define WEB_CODE_VOLET		'4'
 #define WEB_CODE_CLASS_POULE	'5'
 #define WEB_CODE_POULE		'6'
+#define WEB_CODE_CHECKED	'7'
 
 
 #define TYPE_PORTE		0
@@ -282,13 +301,15 @@ typedef struct
 #define TYPE_VOLET		3
 #define TYPE_CLASS_POULE	4
 #define TYPE_POULE		5
+#define TYPE_CHECKED		6
 
 code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
 		    {"ko", "ok"}, /* TYPE_CLASS */
 		    {"Ouvert", "Ferme"}, /* TYPE_VOLET */
 		    {"vi", "po"}, /* TYPE_CLASS_POULE */
-		    {"Vide", "Poule"}}; /* TYPE_POULE */
+		    {"Vide", "Poule"}, /* TYPE_POULE */
+		    {"", "checked"}}; /* TYPE_CHECKED */
 
 /*
  * 12/12/14
@@ -420,10 +441,18 @@ void setup(void)
 
     /* Init Output Ports */
     pinMode(PIN_OUT_LIGHT_1, OUTPUT);
+    pinMode(PIN_OUT_LAMPE_1, OUTPUT);
+    pinMode(PIN_OUT_LAMPE_2, OUTPUT);
+    pinMode(PIN_OUT_LAMPE_3, OUTPUT);
+    pinMode(PIN_OUT_LAMPE_4, OUTPUT);
     pinMode(PIN_OUT_GSM_INIT, OUTPUT);
     pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
 
     digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_OFF);
+    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_OFF);
+    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_OFF);
+    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_OFF);
     digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 
@@ -514,13 +543,19 @@ void setup(void)
     g_temperature_ext.old = 0;
     g_temperature_garage.old = 0;
     g_edf_hc.old = 0;
-    g_edf_hc.value = 0;
+    g_edf_hc.value = EEPROM.read(0)<<8 + EEPROM.read(1);
     g_edf_hp.old = 0;
-    g_edf_hp.value = 0;
+    g_edf_hp.value = EEPROM.read(2)<<8 + EEPROM.read(3);;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
     g_sched_door_already_closed = 0;
+    g_sched_edf = 0;
+
+    g_lampe1 = LIGHT_OFF;
+    g_lampe2 = LIGHT_OFF;
+    g_lampe3 = LIGHT_OFF;
+    g_lampe4 = LIGHT_OFF;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -738,6 +773,10 @@ void deal_with_code(char item, char type, char code)
 	{
 	    ptr_code = &g_code[TYPE_POULE];
 	}break;
+	case WEB_CODE_CHECKED:
+	{
+	    ptr_code = &g_code[TYPE_CHECKED];
+	}break;
 	default:
 	{
 	    ptr_code = &g_code[0];
@@ -746,6 +785,51 @@ void deal_with_code(char item, char type, char code)
 
     switch (item)
     {
+	case 'a':
+	{
+	    /* fenetre bureau */
+	}
+	break;
+	case 'b':
+	{
+	    /* action lampe 1 */
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe1],
+		strlen(ptr_code->name[g_lampe1]));
+	}
+	break;
+	case 'c':
+	{
+	    /* action lampe 2 */
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe2],
+		strlen(ptr_code->name[g_lampe2]));
+	}
+	break;
+	case 'd':
+	{
+	    /* action lampe 3 */
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe3],
+		strlen(ptr_code->name[g_lampe3]));
+	}
+	break;
+	case 'e':
+	{
+	    /* action lampe 4 */
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe4],
+		strlen(ptr_code->name[g_lampe4]));
+	}
+	break;
+	case 'f':
+	{
+	    /* hc */
+	    g_client.print(g_edf_hc.value);
+	}
+	break;
+	case 'g':
+	{
+	    /* hp */
+	    g_client.print(g_edf_hp.value);
+	}
+	break;
 	case 'w':
 	{
 	    if (g_critical_time)
@@ -880,6 +964,10 @@ void deal_with_code(char item, char type, char code)
 	    g_client.write((uint8_t*)ptr_code->name[g_poulailler_porte.curr],
 		strlen(ptr_code->name[g_poulailler_porte.curr]));
 	}break;
+	case 'Q':
+	{
+	    /* porte Bureau */
+	}break;
 	case 'R':
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_poule_gauche.curr],
@@ -902,6 +990,10 @@ void deal_with_code(char item, char type, char code)
 	case 'W':
 	{
 	    g_client.print(g_edf_hc.value);
+	}break;
+	case 'X':
+	{
+	    /* lumiere bureau */
 	}break;
 	case 'Y':
 	{
@@ -1806,7 +1898,7 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
     fd.close();
 }
 
-void save_entry_temp(const char *file, int value)
+void save_entry_temp(const char *file, uint16_t value)
 {
     File  fd;
     char data[4+1];
@@ -2398,6 +2490,7 @@ void process_schedule(void)
 	    g_sched_temperature = 0;
 	}
 
+	/*************************************/
 	/* check every 2 hours if GSM is init */
 	/*if ((g_init_gsm == 0) && ((g_hour100 & 0x2) == g_hour100))
 	{
@@ -2405,6 +2498,30 @@ void process_schedule(void)
 	}
 	*/
 
+	/*************************************/
+	/* Scheduling for write into eeprom EDF counter every days AT 01:00 */
+	if (g_hour100 == 100)
+	{
+	    if (g_sched_edf == 0)
+	    {
+		g_sched_edf = 1;
+
+		/* write in file  */
+		save_entry_temp("hc.txt", g_edf_hc.value);
+		EEPROM.write(0, (g_edf_hc.value>>8));
+		EEPROM.write(1, (g_edf_hc.value&0xFF));
+
+		save_entry_temp("hp.txt", g_edf_hp.value);
+		EEPROM.write(2, (g_edf_hp.value>>8));
+		EEPROM.write(3, (g_edf_hp.value&0xFF));
+	    }
+	}
+	else
+	{
+	    g_sched_edf = 0;
+	}
+
+	/*************************************/
 	/* check if door must be opened or closed */
 	if (g_day < 16)
 	    half_month = 0;
@@ -2467,7 +2584,6 @@ void process_action(void)
 		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
 		}
 	    }break;
-
 	    case PROCESS_ACTION_CRITICAL_TIME:
 	    {
 		if (g_recv_gsm[0] == 0)
@@ -2480,9 +2596,65 @@ void process_action(void)
 		}
 	    }
 	    break;
+	    case PROCESS_ACTION_LAMPE_1:
+	    {
+		if (g_lampe1 == 1)
+		{
+		    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_ON);
+		}
+		else
+		{
+		    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_OFF);
+		}
+	    }break;
+	    case PROCESS_ACTION_LAMPE_2:
+	    {
+		if (g_lampe2 == 1)
+		{
+		    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_ON);
+		}
+		else
+		{
+		    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_OFF);
+		}
+	    }break;
+	    case PROCESS_ACTION_LAMPE_3:
+	    {
+		if (g_lampe3 == 1)
+		{
+		    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_ON);
+		}
+		else
+		{
+		    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_OFF);
+		}
+	    }break;
+	    case PROCESS_ACTION_LAMPE_4:
+	    {
+		if (g_lampe4 == 1)
+		{
+		    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_ON);
+		}
+		else
+		{
+		    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_OFF);
+		}
+	    }break;
+	    case PROCESS_ACTION_EDF:
+	    {
+		/* write in file  */
+		save_entry_temp("hc.txt", g_edf_hc.value);
+		EEPROM.write(0, (g_edf_hc.value>>8));
+		EEPROM.write(1, (g_edf_hc.value&0xFF));
+
+		save_entry_temp("hp.txt", g_edf_hp.value);
+		EEPROM.write(2, (g_edf_hp.value>>8));
+		EEPROM.write(3, (g_edf_hp.value&0xFF));
+	    }
+	    break;
 
 	    /*
-	     * Cases not oftem used
+	     * Cases not often used
 	     */
 
 	    case PROCESS_ACTION_GSM_INIT_FAILED:
