@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.25"
+#define VERSION				"v3.26"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -55,10 +55,10 @@
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			37
-#define PIN_OUT_LAMPE_1			38
-#define PIN_OUT_LAMPE_2			39
-#define PIN_OUT_LAMPE_3			40
-#define PIN_OUT_LAMPE_4			41
+#define PIN_OUT_LAMPE_1			39
+#define PIN_OUT_LAMPE_2			38
+#define PIN_OUT_LAMPE_3			41
+#define PIN_OUT_LAMPE_4			40
 
 #define PIN_SS_ETH_CONTROLLER 		50
 
@@ -229,6 +229,9 @@ state_lumiere_s g_edf_hp; /* Y */
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
 
+#define LAMPE_OFF			1
+#define LAMPE_ON			0
+
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
 uint8_t g_critical_time = 0;
@@ -238,10 +241,10 @@ uint8_t g_sched_door_already_opened = 0;
 uint8_t g_sched_door_already_closed = 0;
 uint8_t g_sched_edf = 0;
 
-uint8_t g_lampe1 = LIGHT_OFF;
-uint8_t g_lampe2 = LIGHT_OFF;
-uint8_t g_lampe3 = LIGHT_OFF;
-uint8_t g_lampe4 = LIGHT_OFF;
+uint8_t g_lampe1 = LAMPE_OFF;
+uint8_t g_lampe2 = LAMPE_OFF;
+uint8_t g_lampe3 = LAMPE_OFF;
+uint8_t g_lampe4 = LAMPE_OFF;
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -448,11 +451,16 @@ void setup(void)
     pinMode(PIN_OUT_GSM_INIT, OUTPUT);
     pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
 
+    g_lampe1 = LAMPE_OFF;
+    g_lampe2 = LAMPE_OFF;
+    g_lampe3 = LAMPE_OFF;
+    g_lampe4 = LAMPE_OFF;
+
     digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
-    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_OFF);
-    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_OFF);
-    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_OFF);
-    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_OFF);
+    digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
+    digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
+    digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
+    digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
     digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
 
@@ -551,11 +559,6 @@ void setup(void)
     g_sched_door_already_opened = 0;
     g_sched_door_already_closed = 0;
     g_sched_edf = 0;
-
-    g_lampe1 = LIGHT_OFF;
-    g_lampe2 = LIGHT_OFF;
-    g_lampe3 = LIGHT_OFF;
-    g_lampe4 = LIGHT_OFF;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -2373,17 +2376,24 @@ void process_domotix_quick(void)
 	    if (edf->curr > 8)
 	    {
 		edf->state_curr = 1;
-		edf->value++;
-		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
 	    }
 	    else
 	    {
 		edf->state_curr = 0;
-		digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
 	    }
 
 	    if ((edf->state_curr != edf->state_old) || (g_init_quick))
 	    {
+		if (edf->state_curr == 0)
+		{
+		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+		}
+		else
+		{
+		    edf->value++;
+		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
+		}
+
 		edf->state_old = edf->state_curr;
 	    }
 	}
@@ -2398,17 +2408,20 @@ void process_time(void)
 {
     if (g_process_time != PROCESS_OFF)
     {
-	g_hour = hour();
-	g_min  = minute();
-	g_hour100 = (100*g_hour + g_min);
-	g_sec  = second();
-	g_day  = day();
-	g_mon  = month();
-	g_year = year();
+	if (g_sec != second())
+	{
+	    g_hour = hour();
+	    g_min  = minute();
+	    g_hour100 = (100*g_hour + g_min);
+	    g_sec  = second();
+	    g_day  = day();
+	    g_mon  = month();
+	    g_year = year();
 
-	/* save current date and clock in global string var */
-	digitalClock();
-	digitalDate();
+	    /* save current date and clock in global string var */
+	    digitalClock();
+	    digitalDate();
+	}
     }
 }
 
