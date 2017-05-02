@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.26"
+#define VERSION				"v3.27"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -1571,6 +1571,25 @@ void process_ethernet(void)
 			PgmClientPrintln("Content-Type: text/html");
 			g_client.println();
 			PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
+		    }
+		}
+		else
+		{
+		    if (strstr(g_line, "POST /config.htm") != NULL)
+		    {
+			if ((g_remoteIP[0] != 192) &&
+			    (g_remoteIP[1] != 168) &&
+			    (g_remoteIP[2] != 5))
+			{
+			    PgmClientPrintln("HTTP/1.1 404 Not Authorized");
+			    PgmClientPrintln("Content-Type: text/html");
+			    g_client.println();
+			    PgmClientPrintln("<h2>Domotix Error: You are not allowed to post to this page!</h2>");
+			}
+			else
+			{
+			    
+			}
 		    }
 		}
 		else
