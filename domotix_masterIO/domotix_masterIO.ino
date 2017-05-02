@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.27"
+#define VERSION				"v3.28"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -169,11 +169,9 @@ volatile uint8_t g_process_action;
 #define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
 #define PROCESS_ACTION_LIGHT_1			GSM_IO_COMMAND_LIGHT_1
 #define PROCESS_ACTION_CRITICAL_TIME		GSM_IO_COMMAND_CRITICAL_TIME
-#define PROCESS_ACTION_LAMPE_1			0x61
-#define PROCESS_ACTION_LAMPE_2			0x62
-#define PROCESS_ACTION_LAMPE_3			0x63
-#define PROCESS_ACTION_LAMPE_4			0x64
-#define PROCESS_ACTION_EDF			0x65
+#define PROCESS_ACTION_LAMPE			0x61
+#define PROCESS_ACTION_EDF			0x62
+#define PROCESS_ACTION_TIMEZONE			0x63
 
 uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_DO_NOTHING		PROCESS_OFF
@@ -193,11 +191,11 @@ typedef struct state_porte_s
 
 typedef struct state_lumiere_s
 {
-    int old;
-    int curr;
-    int state_old;
-    int state_curr;
-    int value;
+    uint8_t old;
+    uint8_t curr;
+    uint8_t state_old;
+    uint8_t state_curr;
+    uint32_t value;
 };
 
 state_porte_s g_garage_droite; /* A */
@@ -392,6 +390,7 @@ time_t prevDisplay = 0;
 /*  NTP time is in the first 48 bytes of message*/
 byte g_packetBuffer[NTP_PACKET_SIZE];
 uint8_t g_NTP = 0;
+uint8_t g_timezone = 1;
 
 /* date & time */
 uint8_t g_hour = 0;
@@ -512,6 +511,7 @@ void setup(void)
     g_recv_state = CMD_STATE_START;
     g_recv_size = 0;
     g_recv_index = 0;
+    g_timezone = EEPROM.read(4);
 
     /* init pipes */
     g_recv_gsm[0]	= 0;
@@ -551,9 +551,9 @@ void setup(void)
     g_temperature_ext.old = 0;
     g_temperature_garage.old = 0;
     g_edf_hc.old = 0;
-    g_edf_hc.value = EEPROM.read(0)<<8 + EEPROM.read(1);
+    g_edf_hc.value = EEPROM.read(0)<<24 + EEPROM.read(1)<<16 + EEPROM.read(2)<<24 + EEPROM.read(3);
     g_edf_hp.old = 0;
-    g_edf_hp.value = EEPROM.read(2)<<8 + EEPROM.read(3);;
+    g_edf_hp.value = EEPROM.read(4)<<24 + EEPROM.read(5)<<16 + EEPROM.read(6)<<24 + EEPROM.read(7);
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -1204,7 +1204,7 @@ time_t getNtpTime(void)
 	    secsSince1900 |= (unsigned long)g_packetBuffer[41] << 16;
 	    secsSince1900 |= (unsigned long)g_packetBuffer[42] << 8;
 	    secsSince1900 |= (unsigned long)g_packetBuffer[43];
-	    return secsSince1900 - 2208988800UL + TIMEZONE * SECS_PER_HOUR;
+	    return secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR;
 	}
     }
 #ifdef DEBUG
@@ -1414,7 +1414,11 @@ void process_ethernet(void)
 {
     uint8_t count;
     char *end_filename;
+    char *paramstr;
+    char *end_paramstr;
     char eat_req;
+    char save_char;
+
     int exit;
 
     if (g_process_ethernet != PROCESS_OFF)
@@ -1482,6 +1486,7 @@ void process_ethernet(void)
 	    /********** Parsing Line received **************/
 	    if ((g_page_web & WEB_EOL) == WEB_EOL)
 	    {
+		/* GET /config.htm?Lampe3=on&Lampe4=on HTTP/1.1 */
 		if (strstr(g_line, "GET /") != NULL)
 		{
 		    g_filename.name[0] = '\0';
@@ -1495,7 +1500,115 @@ void process_ethernet(void)
 		    }
 		    else
 		    {
-			end_filename = strstr(g_line," HTTP");
+			/* Check if it's a request */
+			end_filename = strstr(g_line,"?");
+			if (end_filename != NULL)
+			{
+			    /* check for parameters */
+			    paramstr = strstr(g_line,"Lampe1=");
+			    if (paramstr == NULL)
+			    {
+				g_lampe1 = LAMPE_OFF;
+				g_process_action = PROCESS_ACTION_LAMPE;
+			    }
+			    else
+			    {
+				if (strcmp(paramstr+7,"on") == 0)
+				{
+				    g_lampe1 = LAMPE_ON;
+				    g_process_action = PROCESS_ACTION_LAMPE;
+				}
+			    }
+			    paramstr = strstr(g_line,"Lampe2=");
+			    if (paramstr == NULL)
+			    {
+				g_lampe2 = LAMPE_OFF;
+				g_process_action = PROCESS_ACTION_LAMPE;
+			    }
+			    else
+			    {
+				if (strcmp(paramstr+7,"on") == 0)
+				{
+				    g_lampe2 = LAMPE_ON;
+				    g_process_action = PROCESS_ACTION_LAMPE;
+				}
+			    }
+			    paramstr = strstr(g_line,"Lampe3=");
+			    if (paramstr == NULL)
+			    {
+				g_lampe3 = LAMPE_OFF;
+				g_process_action = PROCESS_ACTION_LAMPE;
+			    }
+			    else
+			    {
+				if (strcmp(paramstr+7,"on") == 0)
+				{
+				    g_lampe3 = LAMPE_ON;
+				    g_process_action = PROCESS_ACTION_LAMPE;
+				}
+			    }
+			    paramstr = strstr(g_line,"Lampe4=");
+			    if (paramstr == NULL)
+			    {
+				g_lampe4 = LAMPE_OFF;
+				g_process_action = PROCESS_ACTION_LAMPE;
+			    }
+			    else
+			    {
+				if (strcmp(paramstr+7,"on") == 0)
+				{
+				    g_lampe4 = LAMPE_ON;
+				    g_process_action = PROCESS_ACTION_LAMPE;
+				}
+			    }
+			    paramstr = strstr(g_line,"hc=");
+			    if (paramstr != NULL)
+			    {
+				end_paramstr = strstr(g_line,"&");
+				if (end_paramstr != NULL)
+				{
+				    save_char = *end_paramstr;
+				    *end_paramstr = '\0';
+
+				    g_edf_hc.value = strtoul(paramstr, NULL, 10);
+				    g_process_action = PROCESS_ACTION_EDF;
+				    *end_paramstr = save_char;
+				}
+			    }
+			    paramstr = strstr(g_line,"hp=");
+			    if (paramstr != NULL)
+			    {
+				end_paramstr = strstr(g_line," ");
+				if (end_paramstr != NULL)
+				{
+				    save_char = *end_paramstr;
+				    *end_paramstr = '\0';
+
+				    g_edf_hp.value   = strtoul(paramstr, NULL, 10);
+				    g_process_action = PROCESS_ACTION_EDF;
+				    *end_paramstr    = save_char;
+				}
+			    }
+			    paramstr = strstr(g_line,"timezone=");
+			    if (paramstr != NULL)
+			    {
+				end_paramstr = strstr(g_line," ");
+				if (end_paramstr != NULL)
+				{
+				    save_char = *end_paramstr;
+				    *end_paramstr = '\0';
+
+				    g_timezone = strtoul(paramstr, NULL, 10);
+				    g_process_action = PROCESS_ACTION_TIMEZONE;
+				    *end_paramstr    = save_char;
+				}
+			    }
+			}
+			else
+			{
+			    end_filename = strstr(g_line," HTTP");
+			}
+
 			if (end_filename != NULL)
 			{
 			    *end_filename = '\0';
@@ -1573,23 +1686,20 @@ void process_ethernet(void)
 			PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
 		    }
 		}
-		else
+		else if (strstr(g_line, "POST /config.htm") != NULL)
 		{
-		    if (strstr(g_line, "POST /config.htm") != NULL)
+		    if ((g_remoteIP[0] != 192) &&
+			(g_remoteIP[1] != 168) &&
+			(g_remoteIP[2] != 5))
 		    {
-			if ((g_remoteIP[0] != 192) &&
-			    (g_remoteIP[1] != 168) &&
-			    (g_remoteIP[2] != 5))
-			{
-			    PgmClientPrintln("HTTP/1.1 404 Not Authorized");
-			    PgmClientPrintln("Content-Type: text/html");
-			    g_client.println();
-			    PgmClientPrintln("<h2>Domotix Error: You are not allowed to post to this page!</h2>");
-			}
-			else
-			{
-			    
-			}
+			PgmClientPrintln("HTTP/1.1 404 Not Authorized");
+			PgmClientPrintln("Content-Type: text/html");
+			g_client.println();
+			PgmClientPrintln("<h2>Domotix Error: You are not allowed to post to this page!</h2>");
+		    }
+		    else
+		    {
+
 		    }
 		}
 		else
@@ -2540,12 +2650,16 @@ void process_schedule(void)
 
 		/* write in file  */
 		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (g_edf_hc.value>>8));
-		EEPROM.write(1, (g_edf_hc.value&0xFF));
+		EEPROM.write(0, (g_edf_hc.value>>24));
+		EEPROM.write(1, (g_edf_hc.value>>16));
+		EEPROM.write(2, (g_edf_hc.value>>8));
+		EEPROM.write(3, (g_edf_hc.value&0xFF));
 
 		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(2, (g_edf_hp.value>>8));
-		EEPROM.write(3, (g_edf_hp.value&0xFF));
+		EEPROM.write(4, (g_edf_hp.value>>24));
+		EEPROM.write(5, (g_edf_hp.value>>16));
+		EEPROM.write(6, (g_edf_hp.value>>8));
+		EEPROM.write(7, (g_edf_hp.value&0xFF));
 	    }
 	}
 	else
@@ -2628,62 +2742,35 @@ void process_action(void)
 		}
 	    }
 	    break;
-	    case PROCESS_ACTION_LAMPE_1:
+	    case PROCESS_ACTION_LAMPE:
 	    {
-		if (g_lampe1 == 1)
-		{
-		    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_ON);
-		}
-		else
-		{
-		    digitalWrite(PIN_OUT_LAMPE_1, LIGHT_OFF);
-		}
-	    }break;
-	    case PROCESS_ACTION_LAMPE_2:
-	    {
-		if (g_lampe2 == 1)
-		{
-		    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_ON);
-		}
-		else
-		{
-		    digitalWrite(PIN_OUT_LAMPE_2, LIGHT_OFF);
-		}
-	    }break;
-	    case PROCESS_ACTION_LAMPE_3:
-	    {
-		if (g_lampe3 == 1)
-		{
-		    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_ON);
-		}
-		else
-		{
-		    digitalWrite(PIN_OUT_LAMPE_3, LIGHT_OFF);
-		}
-	    }break;
-	    case PROCESS_ACTION_LAMPE_4:
-	    {
-		if (g_lampe4 == 1)
-		{
-		    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_ON);
-		}
-		else
-		{
-		    digitalWrite(PIN_OUT_LAMPE_4, LIGHT_OFF);
-		}
+		    digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
+		    digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
+		    digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
+		    digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
 	    }break;
 	    case PROCESS_ACTION_EDF:
 	    {
 		/* write in file  */
 		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (g_edf_hc.value>>8));
-		EEPROM.write(1, (g_edf_hc.value&0xFF));
+		EEPROM.write(0, (g_edf_hc.value>>24));
+		EEPROM.write(1, (g_edf_hc.value>>16));
+		EEPROM.write(2, (g_edf_hc.value>>8));
+		EEPROM.write(3, (g_edf_hc.value&0xFF));
 
 		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(2, (g_edf_hp.value>>8));
-		EEPROM.write(3, (g_edf_hp.value&0xFF));
+		EEPROM.write(4, (g_edf_hp.value>>24));
+		EEPROM.write(5, (g_edf_hp.value>>16));
+		EEPROM.write(6, (g_edf_hp.value>>8));
+		EEPROM.write(7, (g_edf_hp.value&0xFF));
 	    }
 	    break;
+	    case PROCESS_ACTION_TIMEZONE:
+	    {
+		EEPROM.write(4, g_timezone);
+	    }
+	    break;
+
 
 	    /*
 	     * Cases not often used
