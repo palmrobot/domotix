@@ -259,7 +259,7 @@ EthernetClient g_client;
 uint8_t g_remoteIP[] = {0, 0, 0, 0};
 //g_client.getRemoteIP(g_remoteIP); // where rip is defined as byte rip[] = {0,0,0,0 };
 
-#define LINE_MAX_LEN			64
+#define LINE_MAX_LEN			100
 char g_line[LINE_MAX_LEN + 1];
 
 #define BUFF_HTML_MAX_SIZE		50
@@ -801,52 +801,52 @@ void deal_with_code(char item, char type, char code)
 	case 'b':
 	{
 	    /* action lampe 1 */
-	    if ((type == 'N') && (g_lampe1 == 1))
+	    if ((type == 'N') && (g_lampe1 == LAMPE_ON))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
-	    else if ((type == 'F') && (g_lampe1 == 0))
+	    else if ((type == 'F') && (g_lampe1 == LAMPE_OFF))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
 	}
 	break;
 	case 'c':
 	{
 	    /* action lampe 2 */
-	    if ((type == 'N') && (g_lampe2 == 1))
+	    if ((type == 'N') && (g_lampe2 == LAMPE_ON))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
-	    else if ((type == 'F') && (g_lampe2 == 0))
+	    else if ((type == 'F') && (g_lampe2 == LAMPE_OFF))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
 	}
 	break;
 	case 'd':
 	{
 	    /* action lampe 3 */
-	    if ((type == 'N') && (g_lampe3 == 1))
+	    if ((type == 'N') && (g_lampe3 == LAMPE_ON))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
-	    else if ((type == 'F') && (g_lampe3 == 0))
+	    else if ((type == 'F') && (g_lampe3 == LAMPE_OFF))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
 	}
 	break;
 	case 'e':
 	{
 	    /* action lampe 4 */
-	    if ((type == 'N') && (g_lampe4 == 1))
+	    if ((type == 'N') && (g_lampe4 == LAMPE_ON))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
-	    else if ((type == 'F') && (g_lampe4 == 0))
+	    else if ((type == 'F') && (g_lampe4 == LAMPE_OFF))
 	    {
-		g_client.write("checked", 7);
+		PgmClientPrint("checked");
 	    }
 	}
 	break;
@@ -1543,7 +1543,7 @@ void process_ethernet(void)
 		    else
 		    {
 			/* Check if it's a request for */
-			if (strstr(g_line,"?lampe") != NULL)
+			if (strstr(g_line,"?Lampe") != NULL)
 			{
 			    /* check for parameters */
 			    paramstr = strstr(g_line,"lampe1_on");
@@ -1557,6 +1557,7 @@ void process_ethernet(void)
 				g_lampe1 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
+
 			    paramstr = strstr(g_line,"lampe2_on");
 			    if (paramstr != NULL)
 			    {
@@ -1568,6 +1569,7 @@ void process_ethernet(void)
 				g_lampe2 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
+
 			    paramstr = strstr(g_line,"lampe3_on");
 			    if (paramstr != NULL)
 			    {
@@ -1579,6 +1581,7 @@ void process_ethernet(void)
 				g_lampe3 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
+
 			    paramstr = strstr(g_line,"lampe4_on");
 			    if (paramstr != NULL)
 			    {
@@ -1587,7 +1590,7 @@ void process_ethernet(void)
 			    }
 			    else
 			    {
-				g_lampe4 = LAMPE_ON;
+				g_lampe4 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
 			}
