@@ -34,6 +34,7 @@ width:998px;
 }
 .liste
 {
+padding-left:200px;
 color:white;
 text-align: center;
 }
@@ -43,6 +44,19 @@ text-align:center;
 color:#8AADFA;
 border:0px;
 height:30px;
+}
+.celldiv
+{
+margin-left:200px;
+}
+.cell
+{
+text-align:left;
+padding-right:100px
+}
+.cell_env
+{
+text-align:left;
 }
 -->
 </style>
@@ -57,34 +71,53 @@ height:30px;
 </td>
 </tr>
 </table>
-<table class="table_piece">
+<div class="celldiv">
+<table>
 <tr>
-<td>
 <form method="get" class="liste" action="config.htm">
+<td class="cell">
 <p>
-Actionner : <br/><br/>
 <input type="checkbox" name="Lampe1" id="lampe1" $b07 /><label for="lampe1">Lampe 1</label><br />
 <input type="checkbox" name="Lampe2" id="lampe2" $c07 /><label for="lampe2">Lampe 2</label><br />
 <input type="checkbox" name="Lampe3" id="lampe3" $d07 /><label for="lampe3">Lampe 3</label><br />
 <input type="checkbox" name="Lampe4" id="lampe4" $e07 /><label for="lampe4">Lampe 4</label>
 </p>
-<br /><input type="submit" value="Envoyer lampes" /><br /><br /><br /><br />
-</form>
 </td>
-<td>
+<td class="cell_env">
+<input type="submit" value="Envoyer" />
+</td>
+</form>
+</tr>
+<tr>
 <form method="get" class="liste" action="config.htm">
+<td class="cell">
 <p>
-Saisir une nouvelle valeur : <br/><br/>
-<label for="HeureC">Heures creuses :</label>
-<input type="number" name="hc" id="hc" size="20" maxlength="10" value="$f00" /><br /><br />
-<label for="HeureC">Heures pleines :</label>
-<input type="number" name="hp" id="hp" size="20" maxlength="10" value="$g00" /><br /><br />
+<input type="radio" name="timezone" id="time2" value="time2" /><label for="time2">été</label><br />
+<input type="radio" name="timezone" id="time1" value="time1" /><label for="time1">hiver</label>
 </p>
-<br /><input type="submit" value="Envoyer edf" /><br /><br /><br /><br />
-</form>
 </td>
+<td class="cell_env">
+<input type="submit" value="Envoyer" />
+</td>
+</form>
+</tr>
+<tr>
+<form method="get" class="liste" action="config.htm">
+<td class="cell">
+<p>
+<label for="hc"> Heures creuses</label><br />
+<input type="number" name="hc" id="hc" value="$f00" /><br /><br />
+<label for="hp"> Heures pleines</label><br />
+<input type="number" name="hp" id="hp" value="$g00" />
+</p>
+</td>
+<td class="cell_env">
+<input type="submit" value="Envoyer" />
+</td>
+</form>
 </tr>
 </table>
+</div>
 <table class="table_piece">
 <tr>
 <td colspan="2" class="bas">
