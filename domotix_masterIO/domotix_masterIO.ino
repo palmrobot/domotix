@@ -511,7 +511,12 @@ void setup(void)
     g_recv_state = CMD_STATE_START;
     g_recv_size = 0;
     g_recv_index = 0;
-    g_timezone = EEPROM.read(4);
+    g_timezone = EEPROM.read(8);
+    if ((g_timezone != 1) || (g_timezone != 2))
+    {
+	g_timezone = 1;
+	EEPROM.write(8, g_timezone);
+    }
 
     /* init pipes */
     g_recv_gsm[0]	= 0;
@@ -2767,7 +2772,13 @@ void process_action(void)
 	    break;
 	    case PROCESS_ACTION_TIMEZONE:
 	    {
-		EEPROM.write(4, g_timezone);
+		if ((g_timezone != 1) || (g_timezone != 2))
+		{
+		    g_timezone = 1;
+		    EEPROM.write(8, g_timezone);
+		}
+		else
+		    EEPROM.write(8, g_timezone);
 	    }
 	    break;
 
