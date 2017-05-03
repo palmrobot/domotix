@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.29"
+#define VERSION				"v3.30"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -801,29 +801,53 @@ void deal_with_code(char item, char type, char code)
 	case 'b':
 	{
 	    /* action lampe 1 */
-	    g_client.write((uint8_t*)ptr_code->name[g_lampe1],
-		strlen(ptr_code->name[g_lampe1]));
+	    if ((type == 'N') && (g_lampe1 == 1))
+	    {
+		g_client.write("checked", 7);
+	    }
+	    else if ((type == 'F') && (g_lampe1 == 0))
+	    {
+		g_client.write("checked", 7);
+	    }
 	}
 	break;
 	case 'c':
 	{
 	    /* action lampe 2 */
-	    g_client.write((uint8_t*)ptr_code->name[g_lampe2],
-		strlen(ptr_code->name[g_lampe2]));
+	    if ((type == 'N') && (g_lampe2 == 1))
+	    {
+		g_client.write("checked", 7);
+	    }
+	    else if ((type == 'F') && (g_lampe2 == 0))
+	    {
+		g_client.write("checked", 7);
+	    }
 	}
 	break;
 	case 'd':
 	{
 	    /* action lampe 3 */
-	    g_client.write((uint8_t*)ptr_code->name[g_lampe3],
-		strlen(ptr_code->name[g_lampe3]));
+	    if ((type == 'N') && (g_lampe3 == 1))
+	    {
+		g_client.write("checked", 7);
+	    }
+	    else if ((type == 'F') && (g_lampe3 == 0))
+	    {
+		g_client.write("checked", 7);
+	    }
 	}
 	break;
 	case 'e':
 	{
 	    /* action lampe 4 */
-	    g_client.write((uint8_t*)ptr_code->name[g_lampe4],
-		strlen(ptr_code->name[g_lampe4]));
+	    if ((type == 'N') && (g_lampe4 == 1))
+	    {
+		g_client.write("checked", 7);
+	    }
+	    else if ((type == 'F') && (g_lampe4 == 0))
+	    {
+		g_client.write("checked", 7);
+	    }
 	}
 	break;
 	case 'f':
@@ -836,6 +860,19 @@ void deal_with_code(char item, char type, char code)
 	{
 	    /* hp */
 	    g_client.print(g_edf_hp.value);
+	}
+	break;
+	case 'h':
+	{
+	    /* action timezone */
+	    if ((type == 'N') && (g_timezone == 2))
+	    {
+		g_client.write("checked", 7);
+	    }
+	    else if ((type == 'F') && (g_timezone == 1))
+	    {
+		g_client.write("checked", 7);
+	    }
 	}
 	break;
 	case 'w':
@@ -1057,7 +1094,7 @@ void send_file_to_client(File *file)
 	    /* then get the code */
 	    code = file->read();
 
-	    if (type == '0')
+	    if ((type == '0') || (type == 'N') || (type == 'F'))
 	    {
 		deal_with_code(item, type, code);
 	    }
@@ -1506,46 +1543,46 @@ void process_ethernet(void)
 		    else
 		    {
 			/* Check if it's a request for */
-			if (strstr(g_line,"?Lampe") != NULL)
+			if (strstr(g_line,"?lampe") != NULL)
 			{
 			    /* check for parameters */
-			    paramstr = strstr(g_line,"Lampe1=");
-			    if (paramstr == NULL)
-			    {
-				g_lampe1 = LAMPE_OFF;
-				g_process_action = PROCESS_ACTION_LAMPE;
-			    }
-			    else
+			    paramstr = strstr(g_line,"lampe1_on");
+			    if (paramstr != NULL)
 			    {
 				g_lampe1 = LAMPE_ON;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
-			    paramstr = strstr(g_line,"Lampe2=");
-			    if (paramstr == NULL)
+			    else
 			    {
-				g_lampe2 = LAMPE_OFF;
+				g_lampe1 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
-			    else
+			    paramstr = strstr(g_line,"lampe2_on");
+			    if (paramstr != NULL)
 			    {
 				g_lampe2 = LAMPE_ON;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
-			    paramstr = strstr(g_line,"Lampe3=");
-			    if (paramstr == NULL)
+			    else
 			    {
-				g_lampe3 = LAMPE_OFF;
+				g_lampe2 = LAMPE_OFF;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
-			    else
+			    paramstr = strstr(g_line,"lampe3_on");
+			    if (paramstr != NULL)
 			    {
 				g_lampe3 = LAMPE_ON;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
-			    paramstr = strstr(g_line,"Lampe4=");
-			    if (paramstr == NULL)
+			    else
 			    {
-				g_lampe4 = LAMPE_OFF;
+				g_lampe3 = LAMPE_OFF;
+				g_process_action = PROCESS_ACTION_LAMPE;
+			    }
+			    paramstr = strstr(g_line,"lampe4_on");
+			    if (paramstr != NULL)
+			    {
+				g_lampe4 = LAMPE_ON;
 				g_process_action = PROCESS_ACTION_LAMPE;
 			    }
 			    else
@@ -1601,7 +1638,10 @@ void process_ethernet(void)
 				g_process_action = PROCESS_ACTION_TIMEZONE;
 			    }
 			}
-			else
+
+			/* Now get the filename to load the page */
+			end_filename = strstr(g_line,"?");
+			if (end_filename == NULL)
 			{
 			    end_filename = strstr(g_line," HTTP");
 			}
