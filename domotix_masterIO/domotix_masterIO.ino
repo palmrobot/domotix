@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.30"
+#define VERSION				"v3.31"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -1528,7 +1528,6 @@ void process_ethernet(void)
 	    /********** Parsing Line received **************/
 	    if ((g_page_web & WEB_EOL) == WEB_EOL)
 	    {
-		/* GET /config.htm?Lampe3=on&Lampe4=on HTTP/1.1 */
 		if (strstr(g_line, "GET /") != NULL)
 		{
 		    g_filename.name[0] = '\0';
@@ -1542,6 +1541,7 @@ void process_ethernet(void)
 		    }
 		    else
 		    {
+			/* GET /config.htm?Lampe3=on&Lampe4=on HTTP/1.1 */
 			/* Check if it's a request for */
 			if (strstr(g_line,"?Lampe") != NULL)
 			{
@@ -1641,7 +1641,6 @@ void process_ethernet(void)
 				g_process_action = PROCESS_ACTION_TIMEZONE;
 			    }
 			}
-
 			/* Now get the filename to load the page */
 			end_filename = strstr(g_line,"?");
 			if (end_filename == NULL)
@@ -1665,65 +1664,85 @@ void process_ethernet(void)
 			}
 		    }
 
-		    if (g_filename.fd.available())
+		    /* check if filename is a keyword */
+		    if (strcmp(g_filename.name, "temp_ext") == 0)
 		    {
-			if ((strstr(g_filename.name, "config.htm") != NULL) &&
-			    (g_remoteIP[0] != 192) &&
-			    (g_remoteIP[1] != 168) &&
-			    (g_remoteIP[2] != 5))
+			g_client.print(g_temperature_ext.curr);
+		    }
+		    else if (strcmp(g_filename.name, "garage") == 0)
+		    {
+			if (g_garage_porte.curr == 0)
 			{
-			    PgmClientPrintln("HTTP/1.1 404 Not Authorized");
-			    PgmClientPrintln("Content-Type: text/html");
-			    g_client.println();
-			    PgmClientPrintln("<h2>Domotix Error: You are not allowed to open this page!</h2>");
+			    PgmClientPrintln("ouverte");
 			}
 			else
 			{
-			    /* send 200 OK */
-			    PgmClientPrintln("HTTP/1.1 200 OK");
-
-			    if (strstr(g_filename.name, ".htm") != NULL)
-			    {
-				PgmClientPrintln("Content-Type: text/html");
-
-				/* end of header */
-				g_client.println();
-				send_file_to_client(&g_filename.fd);
-				g_filename.fd.close();
-			    }
-			    else
-			    {
-				if (strstr(g_filename.name, ".css") != NULL)
-				{
-				    PgmClientPrintln("Content-Type: text/css");
-				}
-				else if (strstr(g_filename.name, ".jpg") != NULL)
-				{
-				    PgmClientPrintln("Content-Type: image/jpeg");
-				    PgmClientPrintln("Cache-Control: max-age=2592000");
-				}
-				else if (strstr(g_filename.name, ".ico") != NULL)
-				{
-				    PgmClientPrintln("Content-Type: image/x-icon");
-				    PgmClientPrintln("Cache-Control: max-age=2592000");
-				}
-				else
-				    PgmClientPrintln("Content-Type: text");
-
-				/* end of header */
-				g_client.println();
-
-				send_resp_to_client(&g_filename.fd);
-				g_filename.fd.close();
-			    }
+			    PgmClientPrintln("fermer");
 			}
 		    }
 		    else
 		    {
-			PgmClientPrintln("HTTP/1.1 404 Not Found");
-			PgmClientPrintln("Content-Type: text/html");
-			g_client.println();
-			PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
+			/* must be a web page to serve */
+			if (g_filename.fd.available())
+			{
+			    if ((strstr(g_filename.name, "config.htm") != NULL) &&
+				(g_remoteIP[0] != 192) &&
+				(g_remoteIP[1] != 168) &&
+				(g_remoteIP[2] != 5))
+			    {
+				PgmClientPrintln("HTTP/1.1 404 Not Authorized");
+				PgmClientPrintln("Content-Type: text/html");
+				g_client.println();
+				PgmClientPrintln("<h2>Domotix Error: You are not allowed to open this page!</h2>");
+			    }
+			    else
+			    {
+				/* send 200 OK */
+				PgmClientPrintln("HTTP/1.1 200 OK");
+
+				if (strstr(g_filename.name, ".htm") != NULL)
+				{
+				    PgmClientPrintln("Content-Type: text/html");
+
+				    /* end of header */
+				    g_client.println();
+				    send_file_to_client(&g_filename.fd);
+				    g_filename.fd.close();
+				}
+				else
+				{
+				    if (strstr(g_filename.name, ".css") != NULL)
+				    {
+					PgmClientPrintln("Content-Type: text/css");
+				    }
+				    else if (strstr(g_filename.name, ".jpg") != NULL)
+				    {
+					PgmClientPrintln("Content-Type: image/jpeg");
+					PgmClientPrintln("Cache-Control: max-age=2592000");
+				    }
+				    else if (strstr(g_filename.name, ".ico") != NULL)
+				    {
+					PgmClientPrintln("Content-Type: image/x-icon");
+					PgmClientPrintln("Cache-Control: max-age=2592000");
+				    }
+				    else
+					PgmClientPrintln("Content-Type: text");
+
+				    /* end of header */
+				    g_client.println();
+
+				    send_resp_to_client(&g_filename.fd);
+				    g_filename.fd.close();
+				}
+			    }
+			}
+			else
+			{
+			    PgmClientPrintln("HTTP/1.1 404 Not Found");
+			    PgmClientPrintln("Content-Type: text/html");
+			    g_client.println();
+			    PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
+			}
 		    }
 		}
 		else
