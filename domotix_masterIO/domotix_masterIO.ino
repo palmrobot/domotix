@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v3.31"
+#define VERSION				"v4.00"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -52,6 +52,7 @@
 /* lampe4 */				   /* e */
 /* hc */				   /* f */
 /* hp */				   /* g */
+#define PIN_GSM				27 /* h */
 
 #define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LIGHT_1			37
@@ -132,19 +133,9 @@ Master I/O Board                     GSM Board
 
 uint8_t g_recv_gsm[CMD_DATA_MAX];
 uint8_t g_send_to_gsm[CMD_DATA_MAX];
-uint8_t g_command = 0;
 
-#define CMD_STATE_START				1
-#define CMD_STATE_CMD				2
-#define CMD_STATE_SIZE				3
-#define CMD_STATE_DATA				4
-#define CMD_STATE_CRC				5
-#define CMD_STATE_END				6
-
-uint8_t g_recv_state;
-uint8_t g_recv_size;
-uint8_t g_recv_index;
-uint8_t g_recv_crc;
+#define MAX_WAIT_SERIAL				50
+#define TIME_WAIT_SERIAL			10
 
 /********************************************************/
 /*      Process definitions                             */
@@ -508,9 +499,6 @@ void setup(void)
     g_init  = 1;
     g_init_quick = 1;
     g_init_gsm = 0;
-    g_recv_state = CMD_STATE_START;
-    g_recv_size = 0;
-    g_recv_index = 0;
     g_timezone = EEPROM.read(8);
     if ((g_timezone != 1) && (g_timezone != 2))
     {
@@ -628,28 +616,70 @@ void ClientPrintln_P(PGM_P str)
 
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
-    uint8_t crc = 42;
+    uint8_t crc;
+    uint8_t recv_crc;
+    uint8_t nb_retry;
+    uint8_t nb_wait;
+    uint8_t i;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
-    /* Send Start of transmission */
-    Serial.write(COMMAND_START);
-
-    /* Send Command  */
-    Serial.write(cmd);
-
-    /* Send Size of data */
-    Serial.write(size);
-
-    /* Write Data */
-    if ((buffer != NULL) && (size > 0))
+    nb_retry = 3;
+    recv_crc = 0;
+    do
     {
-	Serial.write(buffer, size);
-    }
+	/* Send byte of Start of transmission */
+	Serial.write(COMMAND_START);
 
-    /* Send CRC */
-    Serial.write(crc);
+	/* Send byte of Command  */
+	Serial.write(cmd);
+
+	/* Send byte of Size of data */
+	Serial.write(size);
+
+	/* Write Data */
+	if ((buffer != NULL) && (size > 0))
+	{
+	    Serial.write(buffer, size);
+	    Serial.flush();
+
+	    /* Calcul CRC */
+	    crc = 0;
+	    for(i = 0; i < size ; i ++)
+	    {
+		crc += buffer[i];
+	    }
+
+	    if (crc == 0)
+		crc++;
+	}
+	else
+	{
+	    /* arbitrary value */
+	    crc = 42;
+	}
+
+	/* Send byte of CRC */
+	Serial.write(crc);
+
+	/* wait for answer */
+	nb_wait = 0;
+	while ((Serial.available() < 0) && (nb_wait < MAX_WAIT_SERIAL))
+	{
+	    delay(TIME_WAIT_SERIAL);
+	    nb_wait++;
+	}
+
+	if (nb_wait < MAX_WAIT_SERIAL)
+	{
+	    /* then read crc */
+	    recv_crc = Serial.read();
+
+	    nb_retry--;
+	}
+    }
+    while ((crc != recv_crc) && (nb_retry > 0));
 }
 
 /** Store a string in flash memory.*/
@@ -659,18 +689,19 @@ void send_SMS_P(PGM_P str)
 {
     uint8_t i;
 
-    /* if (g_init_gsm == 0) */
-    /*  	return; */
+    if (g_init_gsm == 0)
+     	return;
+
 
     i = 0;
-    g_send_to_gsm[0] = pgm_read_byte(str);
-
-    while ((i < (CMD_DATA_MAX-1)) && (g_send_to_gsm[i] != 0))
+    do
     {
+	g_send_to_gsm[i] = pgm_read_byte(str);
 	i++;
 	str++;
-	g_send_to_gsm[i] = pgm_read_byte(str);
     }
+    while ((i < CMD_DATA_MAX) && (g_send_to_gsm[i] != 0));
+
 
     if (i > 0)
     {
@@ -727,7 +758,7 @@ void deal_with_file(char item, char type, char code)
 	break;
     }
 
-   switch (code)
+    switch (code)
     {
 	case '0':
 	{
@@ -1255,7 +1286,7 @@ time_t getNtpTime(void)
     return 0;
 }
 
-/* send an NTP request to the time server at the given address */
+    /* send an NTP request to the time server at the given address */
 void sendNTPpacket(IPAddress &address)
 {
     /* set all bytes in the buffer to 0 */
@@ -1283,9 +1314,9 @@ void sendNTPpacket(IPAddress &address)
     g_Udp.endPacket();
 }
 
-/********************************************************/
-/*      Process                                         */
-/********************************************************/
+    /********************************************************/
+    /*      Process                                         */
+    /********************************************************/
 
 #ifdef DEBUG
 void process_serial(void)
@@ -1305,7 +1336,7 @@ void process_serial(void)
 	    {
 		case 'a':
 		{
-			    digitalClockDisplaySerial();
+		    digitalClockDisplaySerial();
 		}break;
 	    }
 
@@ -1322,132 +1353,164 @@ void process_recv_gsm(void)
     uint8_t i;
     uint8_t crc;
     uint8_t recv_crc;
+    uint8_t recv_size;
+    uint8_t recv_index;
+    uint8_t nb_wait;
+    uint8_t error;
+    uint8_t command;
 
     if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
-	switch(g_recv_state)
+	/* if we get a valid char, read char */
+	if (Serial.available() > 0)
 	{
-	    case CMD_STATE_START:
+	    error = 0;
+	    value = Serial.read();
+	    if (value == COMMAND_START)
 	    {
-		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
+		/* wait for command */
+		nb_wait = 0;
+		while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		{
-		    value = Serial.read();
+		    delay(TIME_WAIT_SERIAL);
+		    nb_wait++;
+		}
 
-		    if (value == COMMAND_START)
+		if (nb_wait == TIME_WAIT_SERIAL)
+		{
+		    error = 1;
+		}
+		else
+		{
+		    /* read command value */
+		    command = Serial.read();
+
+		    /* wait for size */
+		    nb_wait = 0;
+		    while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		    {
-			/* next state */
-			g_recv_state = CMD_STATE_CMD;
+			delay(TIME_WAIT_SERIAL);
+			nb_wait++;
+		    }
+
+		    if (nb_wait == TIME_WAIT_SERIAL)
+		    {
+			error = 1;
 		    }
 		    else
 		    {
-			/* retry state */
-			g_recv_state = CMD_STATE_START;
+			/* read size */
+			recv_size = Serial.read();
+			if (recv_size > 0)
+			{
+			    recv_index = 0;
+			    crc   = 0;
+
+			    /* Now read all the data */
+			    nb_wait = 0;
+			    while ((recv_index < recv_size) && (nb_wait < MAX_WAIT_SERIAL))
+			    {
+				if (Serial.available() > 0)
+				{
+				    /* get incoming data: */
+				    g_recv_gsm[recv_index] = Serial.read();
+				    crc += g_recv_gsm[recv_index];
+				    recv_index++;
+				}
+				else
+				{
+				    delay(TIME_WAIT_SERIAL);
+				    nb_wait++;
+				}
+			    }
+
+			    if (nb_wait == TIME_WAIT_SERIAL)
+			    {
+				error = 1;
+			    }
+			    else
+			    {
+				if (recv_index == recv_size)
+				{
+				    /* Set null terminated string */
+				    g_recv_gsm[recv_index] = 0;
+
+				    /* crc == 0 is the error code, then do not use it */
+				    if (crc == 0)
+					crc++;
+				}
+				else
+				{
+				    error = 1;
+				}
+			    }
+			}
+			else
+			{
+			    crc = 42;
+			}
+		    }
+
+		    if (error == 0)
+		    {
+			/* wait for CRC */
+			nb_wait = 0;
+			while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+			{
+			    delay(TIME_WAIT_SERIAL);
+			    nb_wait++;
+			}
+			if (nb_wait == MAX_WAIT_SERIAL)
+			{
+			    error = 1;
+			}
+			else
+			{
+			    /* read CRC */
+			    recv_crc  = Serial.read();
+
+			    /* check CRC */
+			    if (crc == recv_crc)
+			    {
+				/* Send CRC */
+				Serial.write(crc);
+
+				/* then flush serial */
+				Serial.flush();
+
+				/* Set action plan */
+				g_process_action = command;
+
+				/* Disable communication ,wait for message treatment */
+				g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
+			    }
+			    else
+			    {
+				error = 1;
+			    }
+			}
 		    }
 		}
-	    }break;
-	    case CMD_STATE_CMD:
-	    {
-		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
-		{
-		    g_command = Serial.read();
-
-		    /* next state */
-		    g_recv_state = CMD_STATE_SIZE;
-		}
-	    }break;
-	    case CMD_STATE_SIZE:
-	    {
-		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
-		{
-		    g_recv_size  = Serial.read();
-
-		    if (g_recv_size > 0)
-		    {
-			g_recv_index = 0;
-			g_recv_crc   = 0;
-
-			/* next state */
-			g_recv_state = CMD_STATE_DATA;
-		    }
-		    else
-		    {
-			/* next state */
-			g_recv_state = CMD_STATE_CRC;
-		    }
-		}
-	    }break;
-	    case CMD_STATE_DATA:
-	    {
-		/* if we get a valid char, read char */
-		while ((Serial.available() > 0) && (g_recv_index < g_recv_size))
-		{
-		    /* get incoming data: */
-		    g_recv_gsm[g_recv_index] = Serial.read();
-		    g_recv_crc += g_recv_gsm[g_recv_index];
-		    g_recv_index++;
-
-		    if (g_recv_index == g_recv_size)
-		    {
-			/* Set null terminated string */
-			g_recv_gsm[g_recv_index] = 0;
-
-			/* next state */
-			g_recv_state = CMD_STATE_CRC;
-		    }
-		}
-	    }break;
-	    case CMD_STATE_CRC:
-	    {
-		/* if we get a valid char, read char */
-		if (Serial.available() > 0)
-		{
-		    recv_crc  = Serial.read();
-
-		    /* next state */
-		    g_recv_state = CMD_STATE_END;
-
-		    /* =======================> BYPASS CRC !!!!!! */
-#if 0
-		    /* check CRC */
-		    if (recv_crc != g_recv_crc)
-		    {
-			/* wrong command
-			 * Discard it
-			 */
-			g_command = 0;
-
-			/* start waiting for an other comand */
-			g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
-
-			/* restart */
-			g_recv_state = CMD_STATE_START;
-		    }
-		    else
-		    {
-			/* next state */
-			g_recv_state = CMD_STATE_END;
-		    }
-#endif
-		}
-	    }break;
-	    case CMD_STATE_END:
-	    {
-		/* Set action plan */
-		g_process_action = g_command;
-
-		/* Disable communication ,wait for message treatment */
-		g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
-
-		/* next state */
-		g_recv_state = CMD_STATE_START;
-	    }break;
-	    default:
-	    {
 	    }
-	    break;
+	    else
+	    {
+		error = 1;
+	    }
+
+	    if (error == 1)
+	    {
+		/* read all bytes in serial queue */
+		while (Serial.available() > 0 )
+		{
+		     value = Serial.read();
+		}
+		/* then send CRC error */
+		crc = 0;
+		Serial.write(crc);
+
+		/* then flush serial */
+		Serial.flush();
+	    }
 	}
     }
 }
@@ -2850,6 +2913,8 @@ void process_action(void)
 	    /* Reset action, wait for next one */
 	    g_process_action = PROCESS_ACTION_NONE;
 	}
+	
+	
 
     }
 }
