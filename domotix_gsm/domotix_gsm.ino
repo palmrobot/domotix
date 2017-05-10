@@ -26,7 +26,6 @@ Master I/O Board                     GSM Board
 */
 
 #define IO_GSM_COMMAND_SMS			0x30
-#define IO_GSM_COMMAND_IS_INIT			0x31
 
 /*
 Master I/O Board                     GSM Board
@@ -50,7 +49,6 @@ Master I/O Board                     GSM Board
 
 */
 
-#define GSM_IO_COMMAND_INIT_OK			0x41
 #define GSM_IO_COMMAND_INIT_FAILED		0x42
 #define GSM_IO_COMMAND_LIGHT_1			0x43
 #define GSM_IO_COMMAND_CRITICAL_TIME		0x44
@@ -66,7 +64,7 @@ uint8_t g_send_to_masterIO[CMD_DATA_MAX];
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
-#define PIN_MASTER				 /*  */
+#define PIN_OUT_MASTER				4 /* init GSM to master  */
 
 
 /********************************************************/
@@ -102,7 +100,6 @@ uint8_t g_process_recv_masterIO;
 uint8_t g_process_action;
 #define PROCESS_ACTION_NONE				0
 #define PROCESS_ACTION_SMS				IO_GSM_COMMAND_SMS
-#define PROCESS_ACTION_IS_INIT				IO_GSM_COMMAND_IS_INIT
 #define PROCESS_ACTION_TEST				IO_GSM_COMMAND_TEST
 
 uint8_t g_process_recv_sms;
@@ -124,6 +121,10 @@ uint8_t g_critical_alertes;
 void setup()
 {
     boolean not_connected;
+
+    pinMode(PIN_OUT_MASTER, OUTPUT);
+
+    digitalWrite(PIN_OUT_MASTER, 0);
 
     /* init process states */
     g_process_recv_masterIO	= PROCESS_RECV_MASTERIO_WAIT_COMMAND;
@@ -157,13 +158,11 @@ void setup()
     Serial.begin(115200);
     delay(100);
 
-    /* Then send OK is ready */
-    send_msg_to_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
-
     snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Systeme d'envoi de SMS ready !");
     send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
 
     g_gsm_init = GSM_INIT_OK;
+    digitalWrite(PIN_OUT_MASTER, 1);
 
     /* start polling sms */
     g_process_recv_sms = PROCESS_RECV_SMS_WAIT_SMS;
@@ -289,7 +288,7 @@ void process_recv_masterIO(void)
 		    nb_wait++;
 		}
 
-		if (nb_wait == TIME_WAIT_SERIAL)
+		if (nb_wait == MAX_WAIT_SERIAL)
 		{
 		    error = 1;
 		}
@@ -306,7 +305,7 @@ void process_recv_masterIO(void)
 			nb_wait++;
 		    }
 
-		    if (nb_wait == TIME_WAIT_SERIAL)
+		    if (nb_wait == MAX_WAIT_SERIAL)
 		    {
 			error = 1;
 		    }
@@ -337,7 +336,7 @@ void process_recv_masterIO(void)
 				}
 			    }
 
-			    if (nb_wait == TIME_WAIT_SERIAL)
+			    if (nb_wait == MAX_WAIT_SERIAL)
 			    {
 				error = 1;
 			    }
@@ -516,14 +515,6 @@ void process_action(void)
 	    case PROCESS_ACTION_SMS:
 	    {
 		send_SMS((char*)g_recv_masterIO, NICO_NUMBER, 0);
-	    }break;
-	    case PROCESS_ACTION_IS_INIT:
-	    {
-		if (g_gsm_init == GSM_INIT_OK)
-		{
-		    /*  send OK is ready */
-		    send_msg_to_masterIO(GSM_IO_COMMAND_INIT_OK, NULL, 0);
-		}
 	    }break;
 	    default:
 	    {

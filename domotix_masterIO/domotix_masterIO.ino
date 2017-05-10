@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.00"
+#define VERSION				"v4.01"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -40,6 +40,7 @@
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
+#define PIN_GSM				20 /* h */
 #define PIN_BUREAU_PORTE		21 /* Q */
 #define PIN_BUREAU_FENETRE		29 /* a */
 #define PIN_POULAILLER_HALL		28 /* T */
@@ -52,10 +53,10 @@
 /* lampe4 */				   /* e */
 /* hc */				   /* f */
 /* hp */				   /* g */
-#define PIN_GSM				27 /* h */
 
-#define PIN_OUT_GSM_INIT		36
-#define PIN_OUT_LIGHT_1			37
+
+#define PIN_OUT_EDF			36
+#define PIN_OUT_GSM_INIT		37
 #define PIN_OUT_LAMPE_1			39
 #define PIN_OUT_LAMPE_2			38
 #define PIN_OUT_LAMPE_3			41
@@ -99,7 +100,6 @@ Master I/O Board                     GSM Board
 */
 
 #define IO_GSM_COMMAND_SMS			0x30
-#define IO_GSM_COMMAND_IS_INIT			0x31
 
 /*
 Master I/O Board                     GSM Board
@@ -123,7 +123,6 @@ Master I/O Board                     GSM Board
 
 */
 
-#define GSM_IO_COMMAND_INIT_OK			0x41
 #define GSM_IO_COMMAND_INIT_FAILED		0x42
 #define GSM_IO_COMMAND_LIGHT_1			0x43
 #define GSM_IO_COMMAND_CRITICAL_TIME		0x44
@@ -156,8 +155,6 @@ uint8_t g_process_delay;
 
 volatile uint8_t g_process_action;
 #define PROCESS_ACTION_NONE			PROCESS_OFF
-#define PROCESS_ACTION_GSM_INIT_OK		GSM_IO_COMMAND_INIT_OK
-#define PROCESS_ACTION_GSM_INIT_FAILED		GSM_IO_COMMAND_INIT_FAILED
 #define PROCESS_ACTION_LIGHT_1			GSM_IO_COMMAND_LIGHT_1
 #define PROCESS_ACTION_CRITICAL_TIME		GSM_IO_COMMAND_CRITICAL_TIME
 #define PROCESS_ACTION_LAMPE			0x61
@@ -431,9 +428,10 @@ void setup(void)
     pinMode(PIN_POULAILLER_HALL, INPUT);
     pinMode(PIN_BUREAU_PORTE, INPUT);
     pinMode(PIN_BUREAU_FENETRE, INPUT);
+    pinMode(PIN_GSM, INPUT);
 
     /* Init Output Ports */
-    pinMode(PIN_OUT_LIGHT_1, OUTPUT);
+    pinMode(PIN_OUT_EDF, OUTPUT);
     pinMode(PIN_OUT_LAMPE_1, OUTPUT);
     pinMode(PIN_OUT_LAMPE_2, OUTPUT);
     pinMode(PIN_OUT_LAMPE_3, OUTPUT);
@@ -446,7 +444,7 @@ void setup(void)
     g_lampe3 = LAMPE_OFF;
     g_lampe4 = LAMPE_OFF;
 
-    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
     digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
     digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
     digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
@@ -470,12 +468,12 @@ void setup(void)
 
 #ifdef DEBUG
     /* initialize serial communications at 115200 bps */
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(100);
 #endif
 
     /* initialize the serial communications with GSM Board */
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(100);
 
     /* start the Ethernet connection and the server: */
@@ -566,8 +564,6 @@ void setup(void)
     {
 	g_delay[i].delay_inuse  = 0;
     }
-
-    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -691,7 +687,6 @@ void send_SMS_P(PGM_P str)
 
     if (g_init_gsm == 0)
      	return;
-
 
     i = 0;
     do
@@ -1376,7 +1371,7 @@ void process_recv_gsm(void)
 		    nb_wait++;
 		}
 
-		if (nb_wait == TIME_WAIT_SERIAL)
+		if (nb_wait == MAX_WAIT_SERIAL)
 		{
 		    error = 1;
 		}
@@ -1393,7 +1388,7 @@ void process_recv_gsm(void)
 			nb_wait++;
 		    }
 
-		    if (nb_wait == TIME_WAIT_SERIAL)
+		    if (nb_wait == MAX_WAIT_SERIAL)
 		    {
 			error = 1;
 		    }
@@ -1424,7 +1419,7 @@ void process_recv_gsm(void)
 				}
 			    }
 
-			    if (nb_wait == TIME_WAIT_SERIAL)
+			    if (nb_wait == MAX_WAIT_SERIAL)
 			    {
 				error = 1;
 			    }
@@ -2621,12 +2616,12 @@ void process_domotix_quick(void)
 	    {
 		if (edf->state_curr == 0)
 		{
-		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+		    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
 		}
 		else
 		{
 		    edf->value++;
-		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
+		    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
 		}
 
 		edf->state_old = edf->state_curr;
@@ -2739,14 +2734,6 @@ void process_schedule(void)
 	}
 
 	/*************************************/
-	/* check every 2 hours if GSM is init */
-	/*if ((g_init_gsm == 0) && ((g_hour100 & 0x2) == g_hour100))
-	{
-	    send_gsm(IO_GSM_COMMAND_IS_INIT, NULL, 0);
-	}
-	*/
-
-	/*************************************/
 	/* Scheduling for write into eeprom EDF counter every days AT 01:00 */
 	if (g_hour100 == 100)
 	{
@@ -2819,6 +2806,15 @@ void process_schedule(void)
 void process_action(void)
 {
     uint8_t action_done;
+    uint8_t is_gsm_ready;
+
+    /* do it every time in order to be sure to be allowed to send msg to GSM */
+    is_gsm_ready = digitalRead(PIN_GSM);
+    if (is_gsm_ready != g_init_gsm)
+    {
+	g_init_gsm = is_gsm_ready;
+	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+    }
 
     if (g_process_action != PROCESS_ACTION_NONE)
     {
@@ -2829,11 +2825,11 @@ void process_action(void)
 	    {
 		if (g_recv_gsm[0] == 1)
 		{
-		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_ON);
+		    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
 		}
 		else
 		{
-		    digitalWrite(PIN_OUT_LIGHT_1, LIGHT_OFF);
+		    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
 		}
 	    }break;
 	    case PROCESS_ACTION_CRITICAL_TIME:
@@ -2850,10 +2846,10 @@ void process_action(void)
 	    break;
 	    case PROCESS_ACTION_LAMPE:
 	    {
-		    digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
-		    digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
-		    digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
-		    digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
+		digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
+		digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
+		digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
+		digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
 	    }break;
 	    case PROCESS_ACTION_EDF:
 	    {
@@ -2882,23 +2878,6 @@ void process_action(void)
 		    EEPROM.write(8, g_timezone);
 	    }
 	    break;
-
-
-	    /*
-	     * Cases not often used
-	     */
-
-	    case PROCESS_ACTION_GSM_INIT_FAILED:
-	    {
-
-	    }break;
-
-	    case PROCESS_ACTION_GSM_INIT_OK:
-	    {
-		digitalWrite(PIN_OUT_GSM_INIT, 1);
-		g_init_gsm = 1;
-	    }break;
-
 	    default:
 	    {
 	    }
@@ -2913,9 +2892,6 @@ void process_action(void)
 	    /* Reset action, wait for next one */
 	    g_process_action = PROCESS_ACTION_NONE;
 	}
-	
-	
-
     }
 }
 
