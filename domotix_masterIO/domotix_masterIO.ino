@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.04"
+#define VERSION				"v4.05"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -874,7 +874,7 @@ void deal_with_code(char item, char type, char code)
 	{
 	    if (g_critical_time)
 	    {
-		g_client.print(F("Systeme d'alertes actif"));
+		g_client.print(F("Systeme d'alertes : actif"));
 	    }
 	}break;
 	case 'x':
@@ -2205,6 +2205,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS("La porte exterieure du cellier vient de s'ouvrir");
+
+		/* Arm event to avoid openning the door too long */
+		/* 5min maxi 5*60*1000 = */
+		wait_some_time(300000, callback_wait_portecellier);
 	    }
 
 	    wait_a_moment = 1;
@@ -2479,7 +2483,8 @@ void process_domotix(void)
 	if (wait_a_moment)
 	{
 	    /* wait some time, before testing the next time the inputs */
-	    wait_some_time(&g_process_domotix, 500, NULL);
+	    g_process_domotix = PROCESS_OFF;
+	    wait_some_time(500, callback_wait_pdomotix);
 	}
     }
 }
@@ -2556,7 +2561,19 @@ void process_time(void)
     }
 }
 
-void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_delay call_after_delay)
+void callback_wait_pdomotix(void)
+{
+    /* restart process */
+    g_process_domotix = PROCESS_ON;
+}
+
+void callback_wait_portecellier(void)
+{
+    /* Send alerte */
+    send_SMS("La porte du cellier est ouverte depuis 5min");
+}
+
+void wait_some_time(uint32_t time_to_wait, callback_delay call_after_delay)
 {
     uint32_t current_millis;
     uint8_t index;
@@ -2566,8 +2583,6 @@ void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_dela
 	if (g_delay[index].delay_inuse == 0)
 	{
 	    current_millis = millis();
-	    *process = PROCESS_OFF;
-	    g_delay[index].process      = process;
 	    g_delay[index].delay_start  = current_millis;
 	    g_delay[index].cb		= call_after_delay;
 	    g_delay[index].delay_inuse  = 1;
@@ -2601,7 +2616,6 @@ void process_delay(void)
 		    {
 			g_delay[index].cb();
 		    }
-		    *(g_delay[index].process) = PROCESS_ON;
 		    g_delay[index].delay_inuse = 0;
 		}
 	    }
