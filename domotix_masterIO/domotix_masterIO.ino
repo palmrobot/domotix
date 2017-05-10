@@ -588,12 +588,16 @@ void ClientPrint_P(PGM_P str)
 {
     uint8_t len;
     uint8_t i;
+    uint8_t c;
 
     len = strlen(str);
     if (len > 0)
     {
 	for(i = 0; i < len ; i++ )
-	    g_client.write(pgm_read_byte(str + i));
+	{
+	    c = pgm_read_byte(str + i);
+	    g_client.write(c);
+	}
     }
 }
 
