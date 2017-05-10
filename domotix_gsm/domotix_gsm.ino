@@ -220,7 +220,7 @@ void send_msg_to_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
 
 	/* wait for answer */
 	nb_wait = 0;
-	while ((Serial.available() < 0) && (nb_wait < MAX_WAIT_SERIAL))
+	while ((Serial.available() <= 0) && (nb_wait < MAX_WAIT_SERIAL))
 	{
 	    delay(TIME_WAIT_SERIAL);
 	    nb_wait++;
@@ -282,7 +282,7 @@ void process_recv_masterIO(void)
 	    {
 		/* wait for command */
 		nb_wait = 0;
-		while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+		while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		{
 		    delay(TIME_WAIT_SERIAL);
 		    nb_wait++;
@@ -299,7 +299,7 @@ void process_recv_masterIO(void)
 
 		    /* wait for size */
 		    nb_wait = 0;
-		    while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+		    while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		    {
 			delay(TIME_WAIT_SERIAL);
 			nb_wait++;
@@ -367,7 +367,7 @@ void process_recv_masterIO(void)
 		    {
 			/* wait for CRC */
 			nb_wait = 0;
-			while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+			while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 			{
 			    delay(TIME_WAIT_SERIAL);
 			    nb_wait++;

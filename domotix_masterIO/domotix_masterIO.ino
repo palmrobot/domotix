@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.01"
+#define VERSION				"v4.02"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -586,14 +586,14 @@ void setup(void)
  */
 void ClientPrint_P(PGM_P str)
 {
-    uint8_t c;
+    uint8_t len;
+    uint8_t i;
 
-    c = (uint8_t)pgm_read_byte(str);
-    while (c != 0)
+    len = strlen(str);
+    if (len > 0)
     {
-	g_client.write(c);
-	str++;
-	c = (uint8_t)pgm_read_byte(str);
+	for(i = 0; i < len ; i++ )
+	    g_client.write(pgm_read_byte(str + i));
     }
 }
 
@@ -661,7 +661,7 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 
 	/* wait for answer */
 	nb_wait = 0;
-	while ((Serial.available() < 0) && (nb_wait < MAX_WAIT_SERIAL))
+	while ((Serial.available() <= 0) && (nb_wait < MAX_WAIT_SERIAL))
 	{
 	    delay(TIME_WAIT_SERIAL);
 	    nb_wait++;
@@ -684,23 +684,21 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 void send_SMS_P(PGM_P str)
 {
     uint8_t i;
+    uint8_t len;
 
     if (g_init_gsm == 0)
-     	return;
+  	return;
 
-    i = 0;
-    do
+    len = strlen(str);
+    if (len > 0)
     {
-	g_send_to_gsm[i] = pgm_read_byte(str);
-	i++;
-	str++;
-    }
-    while ((i < CMD_DATA_MAX) && (g_send_to_gsm[i] != 0));
+	if (len > CMD_DATA_MAX)
+	    len = CMD_DATA_MAX;
 
+	for(i = 0; i < len ; i++ )
+	    g_send_to_gsm[i] = pgm_read_byte(str+i);
 
-    if (i > 0)
-    {
-	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, i);
+	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, len);
     }
 }
 
@@ -1365,7 +1363,7 @@ void process_recv_gsm(void)
 	    {
 		/* wait for command */
 		nb_wait = 0;
-		while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+		while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		{
 		    delay(TIME_WAIT_SERIAL);
 		    nb_wait++;
@@ -1382,7 +1380,7 @@ void process_recv_gsm(void)
 
 		    /* wait for size */
 		    nb_wait = 0;
-		    while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+		    while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		    {
 			delay(TIME_WAIT_SERIAL);
 			nb_wait++;
@@ -1450,7 +1448,7 @@ void process_recv_gsm(void)
 		    {
 			/* wait for CRC */
 			nb_wait = 0;
-			while ((Serial.available() < 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+			while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 			{
 			    delay(TIME_WAIT_SERIAL);
 			    nb_wait++;
