@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.02"
+#define VERSION				"v4.03"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -573,47 +573,6 @@ void setup(void)
 #endif
 }
 
-/** Store and print a string in flash memory.*/
-#define PgmClientPrint(x) ClientPrint_P(PSTR(x))
-
-/** Store and print a string in flash memory followed by a CR/LF.*/
-#define PgmClientPrintln(x) ClientPrintln_P(PSTR(x))
-
-/*
- * %Print a string in flash memory to the serial port.
- *
- * \param[in] str Pointer to string stored in flash memory.
- */
-void ClientPrint_P(PGM_P str)
-{
-    uint8_t len;
-    uint8_t i;
-    uint8_t c;
-
-    len = strlen(str);
-    if (len > 0)
-    {
-	for(i = 0; i < len ; i++ )
-	{
-	    c = pgm_read_byte(str + i);
-	    g_client.write(c);
-	}
-    }
-}
-
-/*
- * %Print a string in flash memory followed by a CR/LF.
- *
- * \param[in] str Pointer to string stored in flash memory.
- */
-void ClientPrintln_P(PGM_P str)
-{
-  ClientPrint_P(str);
-  g_client.println();
-}
-
-
-
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
     uint8_t crc;
@@ -693,14 +652,15 @@ void send_SMS_P(PGM_P str)
     if (g_init_gsm == 0)
   	return;
 
-    len = strlen(str);
+    len = strlen_P(str);
     if (len > 0)
     {
 	if (len > CMD_DATA_MAX)
-	    len = CMD_DATA_MAX;
+	    len = CMD_DATA_MAX-1;
 
-	for(i = 0; i < len ; i++ )
-	    g_send_to_gsm[i] = pgm_read_byte(str+i);
+	/* for(i = 0; i < len ; i++ ) */
+	/*     g_send_to_gsm[i] = pgm_read_byte(str+i); */
+	strncpy_P((char *)g_send_to_gsm, str, len);
 
 	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, len);
     }
@@ -831,11 +791,11 @@ void deal_with_code(char item, char type, char code)
 	    /* action lampe 1 */
 	    if ((type == 'N') && (g_lampe1 == LAMPE_ON))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	    else if ((type == 'F') && (g_lampe1 == LAMPE_OFF))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	}
 	break;
@@ -844,11 +804,11 @@ void deal_with_code(char item, char type, char code)
 	    /* action lampe 2 */
 	    if ((type == 'N') && (g_lampe2 == LAMPE_ON))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	    else if ((type == 'F') && (g_lampe2 == LAMPE_OFF))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	}
 	break;
@@ -857,11 +817,11 @@ void deal_with_code(char item, char type, char code)
 	    /* action lampe 3 */
 	    if ((type == 'N') && (g_lampe3 == LAMPE_ON))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	    else if ((type == 'F') && (g_lampe3 == LAMPE_OFF))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	}
 	break;
@@ -870,11 +830,11 @@ void deal_with_code(char item, char type, char code)
 	    /* action lampe 4 */
 	    if ((type == 'N') && (g_lampe4 == LAMPE_ON))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	    else if ((type == 'F') && (g_lampe4 == LAMPE_OFF))
 	    {
-		PgmClientPrint("checked");
+		g_client.print(F("checked"));
 	    }
 	}
 	break;
@@ -895,11 +855,11 @@ void deal_with_code(char item, char type, char code)
 	    /* action timezone */
 	    if ((type == 'N') && (g_timezone == 2))
 	    {
-		g_client.write("checked", 7);
+		g_client.print(F("checked"));
 	    }
 	    else if ((type == 'F') && (g_timezone == 1))
 	    {
-		g_client.write("checked", 7);
+		g_client.print(F("checked"));
 	    }
 	}
 	break;
@@ -907,7 +867,7 @@ void deal_with_code(char item, char type, char code)
 	{
 	    if (g_critical_time)
 	    {
-		PgmClientPrint("Systeme d'alertes active");
+		g_client.print(F("Systeme d'alertes actif"));
 	    }
 	}break;
 	case 'x':
@@ -1733,11 +1693,11 @@ void process_ethernet(void)
 		    {
 			if (g_garage_porte.curr == 0)
 			{
-			    PgmClientPrintln("ouverte");
+			    g_client.println(F("ouverte"));
 			}
 			else
 			{
-			    PgmClientPrintln("fermer");
+			    g_client.println(F("fermer"));
 			}
 		    }
 		    else
@@ -1750,19 +1710,19 @@ void process_ethernet(void)
 				(g_remoteIP[1] != 168) &&
 				(g_remoteIP[2] != 5))
 			    {
-				PgmClientPrintln("HTTP/1.1 404 Not Authorized");
-				PgmClientPrintln("Content-Type: text/html");
+				g_client.println(F("HTTP/1.1 404 Not Authorized"));
+				g_client.println(F("Content-Type: text/html"));
 				g_client.println();
-				PgmClientPrintln("<h2>Domotix Error: You are not allowed to open this page!</h2>");
+				g_client.println(F("<h2>Domotix Error: You are not allowed to open this page!</h2>"));
 			    }
 			    else
 			    {
 				/* send 200 OK */
-				PgmClientPrintln("HTTP/1.1 200 OK");
+				g_client.println(F("HTTP/1.1 200 OK"));
 
 				if (strstr(g_filename.name, ".htm") != NULL)
 				{
-				    PgmClientPrintln("Content-Type: text/html");
+				    g_client.println(F("Content-Type: text/html"));
 
 				    /* end of header */
 				    g_client.println();
@@ -1773,20 +1733,20 @@ void process_ethernet(void)
 				{
 				    if (strstr(g_filename.name, ".css") != NULL)
 				    {
-					PgmClientPrintln("Content-Type: text/css");
+					g_client.println(F("Content-Type: text/css"));
 				    }
 				    else if (strstr(g_filename.name, ".jpg") != NULL)
 				    {
-					PgmClientPrintln("Content-Type: image/jpeg");
-					PgmClientPrintln("Cache-Control: max-age=2592000");
+					g_client.println(F("Content-Type: image/jpeg"));
+					g_client.println(F("Cache-Control: max-age=2592000"));
 				    }
 				    else if (strstr(g_filename.name, ".ico") != NULL)
 				    {
-					PgmClientPrintln("Content-Type: image/x-icon");
-					PgmClientPrintln("Cache-Control: max-age=2592000");
+					g_client.println(F("Content-Type: image/x-icon"));
+					g_client.println(F("Cache-Control: max-age=2592000"));
 				    }
 				    else
-					PgmClientPrintln("Content-Type: text");
+					g_client.println(F("Content-Type: text"));
 
 				    /* end of header */
 				    g_client.println();
@@ -1798,27 +1758,27 @@ void process_ethernet(void)
 			}
 			else
 			{
-			    PgmClientPrintln("HTTP/1.1 404 Not Found");
-			    PgmClientPrintln("Content-Type: text/html");
+			    g_client.println(F("HTTP/1.1 404 Not Found"));
+			    g_client.println(F("Content-Type: text/html"));
 			    g_client.println();
-			    PgmClientPrintln("<h2>Domotix Error: File Not Found!</h2>");
+			    g_client.println(F("<h2>Domotix Error: File Not Found!</h2>"));
 			}
 		    }
 		}
 		else
 		{
-		    PgmClientPrintln("HTTP/1.1 404 Not Found");
-		    PgmClientPrintln("Content-Type: text/html");
+		    g_client.println(F("HTTP/1.1 404 Not Found"));
+		    g_client.println(F("Content-Type: text/html"));
 		    g_client.println();
-		    PgmClientPrintln("<h2>Domotix Error: GET /  Not Found!</h2>");
+		    g_client.println(F("<h2>Domotix Error: GET /  Not Found!</h2>"));
 		}
 	    }
 	    else
 	    {
-		PgmClientPrintln("HTTP/1.1 404 Not Found");
-		PgmClientPrintln("Content-Type: text/html");
+		g_client.println(F("HTTP/1.1 404 Not Found"));
+		g_client.println(F("Content-Type: text/html"));
 		g_client.println();
-		PgmClientPrintln("<h2>Domotix Error: GET /  Error, line too long!</h2>");
+		g_client.println(F("<h2>Domotix Error: GET /  Error, line too long!</h2>"));
 	    }
 	    /* close connection */
 	    delay(5);
