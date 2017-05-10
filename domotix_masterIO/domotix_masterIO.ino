@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.03"
+#define VERSION				"v4.04"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -137,6 +137,16 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 #define TIME_WAIT_SERIAL			10
 
 /********************************************************/
+/*      EEPROM Addresses                                */
+/********************************************************/
+
+
+
+#define EEPROM_ADDR_TIMEZONE			8
+#define EEPROM_ADDR_GSM				9
+
+
+/********************************************************/
 /*      Process definitions                             */
 /********************************************************/
 #define PROCESS_OFF			0
@@ -179,11 +189,11 @@ typedef struct state_porte_s
 
 typedef struct state_lumiere_s
 {
-    uint8_t old;
-    uint8_t curr;
+    uint32_t value;
+    uint16_t old;
+    uint16_t curr;
     uint8_t state_old;
     uint8_t state_curr;
-    uint32_t value;
 };
 
 state_porte_s g_garage_droite; /* A */
@@ -342,8 +352,6 @@ time_t g_prevDisplay = 0;
 file_web_t g_filename;
 char  g_clock[9];
 char  g_date[9];
-uint8_t g_init = 0;
-uint8_t g_init_quick = 0;
 uint8_t g_init_gsm = 0;
 
 typedef void (*callback_delay) (void);
@@ -494,56 +502,55 @@ void setup(void)
     /* Init global var */
     g_debug = 0;
     g_NTP   = 0;
-    g_init  = 1;
-    g_init_quick = 1;
-    g_init_gsm = 0;
-    g_timezone = EEPROM.read(8);
+
+    g_init_gsm = EEPROM.read(EEPROM_ADDR_GSM);;
+    if ((g_init_gsm != 0) && (g_init_gsm != 1))
+    {
+	g_init_gsm = 0;
+	EEPROM.write(EEPROM_ADDR_GSM, g_init_gsm);
+    }
+
+    g_timezone = EEPROM.read(EEPROM_ADDR_TIMEZONE);
     if ((g_timezone != 1) && (g_timezone != 2))
     {
 	g_timezone = 2;
-	EEPROM.write(8, g_timezone);
+	EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
     }
 
     /* init pipes */
     g_recv_gsm[0]	= 0;
 
     /* Init global var for web code */
-    g_garage_droite.old = 0;
-    g_garage_gauche.old = 0;
-    g_garage_fenetre.old = 0;
-    g_garage_lumiere_etabli.old = 0;
-    g_garage_lumiere_etabli.state_old = 0;
-    g_garage_lumiere_etabli.state_curr = 0;
-    g_garage_lumiere.old = 0;
-    g_garage_lumiere.state_old = 0;
-    g_garage_lumiere.state_curr = 0;
-    g_garage_porte.old = 0;
+    g_garage_droite.old = 2;
+    g_garage_gauche.old = 2;
+    g_garage_fenetre.old = 2;
+    g_garage_lumiere_etabli.old = 2000;
+    g_garage_lumiere_etabli.state_old = 2;
+    g_garage_lumiere.old = 2000;
+    g_garage_lumiere.state_old = 2;
+    g_garage_porte.old = 2;
 
-    g_cellier_porte_ext.old = 0;
-    g_cellier_porte.old = 0;
-    g_cellier_lumiere.old = 0;
-    g_cellier_lumiere.state_old = 0;
-    g_cellier_lumiere.state_curr = 0;
+    g_cellier_porte_ext.old = 2;
+    g_cellier_porte.old = 2;
+    g_cellier_lumiere.old = 2000;
+    g_cellier_lumiere.state_old = 2;
 
-    g_lingerie_lumiere.old = 0;
-    g_lingerie_lumiere.state_old = 0;
-    g_lingerie_lumiere.state_curr = 0;
-    g_lingerie_porte_cuisine.old = 0;
-    g_lingerie_fenetre.old = 0;
-    g_entree_porte_ext.old = 0;
+    g_lingerie_lumiere.old = 2000;
+    g_lingerie_lumiere.state_old = 2;
+    g_lingerie_porte_cuisine.old = 2;
+    g_lingerie_fenetre.old = 2;
+    g_entree_porte_ext.old = 2;
 
-    g_cuisine_porte_ext.old = 0;
+    g_cuisine_porte_ext.old = 2;
 
-    g_poulailler_porte.old = 0;
-    g_poulailler.old = 0;
-    g_poule_gauche.old = 0;
-    g_poule_droite.old = 0;
+    g_poulailler_porte.old = 2;
+    g_poulailler.old = 2;
+    g_poule_gauche.old = 2;
+    g_poule_droite.old = 2;
 
-    g_temperature_ext.old = 0;
-    g_temperature_garage.old = 0;
-    g_edf_hc.old = 0;
+    g_edf_hc.old = 999999;
     g_edf_hc.value = EEPROM.read(0)<<24 + EEPROM.read(1)<<16 + EEPROM.read(2)<<24 + EEPROM.read(3);
-    g_edf_hp.old = 0;
+    g_edf_hp.old = 999999;
     g_edf_hp.value = EEPROM.read(4)<<24 + EEPROM.read(5)<<16 + EEPROM.read(6)<<24 + EEPROM.read(7);
 
     g_sched_temperature = 0;
@@ -2125,26 +2132,22 @@ void save_entry_temp(const char *file, uint16_t value)
 void process_domotix(void)
 {
     uint8_t wait_a_moment;
-    int value;
-    int value_offset;
+    uint16_t value;
+    uint16_t value_offset;
 
     wait_a_moment = 0;
     if (g_process_domotix != PROCESS_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
-	if ((g_garage_droite.curr != g_garage_droite.old) || (g_init))
+	if (g_garage_droite.curr != g_garage_droite.old)
 	{
 	    g_garage_droite.old = g_garage_droite.curr;
 
 	    /* write in file  */
 	    save_entry("A.txt", g_garage_droite.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage droite :");Serial.println(g_garage_droite.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_garage_droite.curr) && (g_init == 0))
+	    if (g_garage_droite.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La porte de droite du garage vient de s'ouvrir");
@@ -2154,19 +2157,15 @@ void process_domotix(void)
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
-	if ((g_garage_gauche.curr != g_garage_gauche.old) || (g_init))
+	if (g_garage_gauche.curr != g_garage_gauche.old)
 	{
 	    g_garage_gauche.old = g_garage_gauche.curr;
 
 	    /* write in file  */
 	    save_entry("B.txt", g_garage_gauche.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage gauche :");Serial.println(g_garage_gauche.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_garage_gauche.curr) && (g_init == 0))
+	    if (g_garage_gauche.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La porte de gauche du garage vient de s'ouvrir");
@@ -2176,19 +2175,15 @@ void process_domotix(void)
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
-	if ((g_garage_fenetre.curr != g_garage_fenetre.old) || (g_init))
+	if (g_garage_fenetre.curr != g_garage_fenetre.old)
 	{
 	    g_garage_fenetre.old = g_garage_fenetre.curr;
 
 	    /* write in file  */
 	    save_entry("C.txt", g_garage_fenetre.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage fenetre :");Serial.println(g_garage_fenetre.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_garage_fenetre.curr) && (g_init == 0))
+	    if (g_garage_fenetre.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La fenetre du garage vient de s'ouvrir");
@@ -2198,19 +2193,15 @@ void process_domotix(void)
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
-	if ((g_cellier_porte_ext.curr != g_cellier_porte_ext.old) || (g_init))
+	if (g_cellier_porte_ext.curr != g_cellier_porte_ext.old)
 	{
 	    g_cellier_porte_ext.old = g_cellier_porte_ext.curr;
 
 	    /* write in file  */
 	    save_entry("E.txt", g_cellier_porte_ext.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Cellier porte ext :");Serial.println(g_cellier_porte_ext.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_cellier_porte_ext.curr) && (g_init == 0))
+	    if (g_cellier_porte_ext.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La porte exterieure du cellier vient de s'ouvrir");
@@ -2220,61 +2211,48 @@ void process_domotix(void)
 	}
 
 	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
-	if ((g_cellier_porte.curr != g_cellier_porte.old) || (g_init))
+	if (g_cellier_porte.curr != g_cellier_porte.old)
 	{
 	    g_cellier_porte.old = g_cellier_porte.curr;
 
 	    /* write in file  */
 	    save_entry("F.txt", g_cellier_porte.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Cellier porte lingerie :");Serial.println(g_cellier_porte.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
-	if ((g_lingerie_porte_cuisine.curr != g_lingerie_porte_cuisine.old) || (g_init))
+	if (g_lingerie_porte_cuisine.curr != g_lingerie_porte_cuisine.old)
 	{
 	    g_lingerie_porte_cuisine.old = g_lingerie_porte_cuisine.curr;
 
 	    /* write in file  */
 	    save_entry("K.txt", g_lingerie_porte_cuisine.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Lingerie porte cuisine :");Serial.println(g_lingerie_porte_cuisine.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
-	if ((g_garage_porte.curr != g_garage_porte.old) || (g_init))
+	if (g_garage_porte.curr != g_garage_porte.old)
 	{
 	    g_garage_porte.old = g_garage_porte.curr;
 
 	    /* write in file  */
 	    save_entry("H.txt", g_garage_porte.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage fond :");Serial.println(g_garage_porte.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
-	if ((g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old) || (g_init))
+	if (g_cuisine_porte_ext.curr != g_cuisine_porte_ext.old)
 	{
 	    g_cuisine_porte_ext.old = g_cuisine_porte_ext.curr;
 
 	    /* write in file  */
 	    save_entry("L.txt", g_cuisine_porte_ext.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Cuisine porte ext:");Serial.println(g_cuisine_porte_ext.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_cuisine_porte_ext.curr) && (g_init == 0))
+	    if (g_cuisine_porte_ext.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La porte exterieure de la cuisine vient de s'ouvrir");
@@ -2284,18 +2262,15 @@ void process_domotix(void)
 	}
 
 	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
-	if ((g_lingerie_fenetre.curr != g_lingerie_fenetre.old) || (g_init))
+	if (g_lingerie_fenetre.curr != g_lingerie_fenetre.old)
 	{
 	    g_lingerie_fenetre.old = g_lingerie_fenetre.curr;
 
 	    /* write in file  */
 	    save_entry("N.txt", g_lingerie_fenetre.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Lingerie fenetre:");Serial.println(g_lingerie_fenetre.curr);
-#endif
 	    /* Critical part */
-	    if ((g_lingerie_fenetre.curr) && (g_init == 0))
+	    if (g_lingerie_fenetre.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La Fenetre de la lingerie vient de s'ouvrir");
@@ -2305,19 +2280,15 @@ void process_domotix(void)
 	}
 
 	g_entree_porte_ext.curr = digitalRead(PIN_ENTREE_PORTE_EXT);
-	if ((g_entree_porte_ext.curr != g_entree_porte_ext.old) || (g_init))
+	if (g_entree_porte_ext.curr != g_entree_porte_ext.old)
 	{
 	    g_entree_porte_ext.old = g_entree_porte_ext.curr;
 
 	    /* write in file  */
 	    save_entry("O.txt", g_entree_porte_ext.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Entree Porte Ext:");Serial.println(g_entree_porte_ext.curr);
-#endif
-
 	    /* Critical part */
-	    if ((g_entree_porte_ext.curr) && (g_init == 0))
+	    if (g_entree_porte_ext.curr)
 	    {
 		/* Send SMS */
 		send_SMS("La porte d'entree vient de s'ouvrir");
@@ -2327,61 +2298,45 @@ void process_domotix(void)
 	}
 
 	g_poulailler_porte.curr = digitalRead(PIN_POULAILLER_PORTE);
-	if ((g_poulailler_porte.curr != g_poulailler_porte.old) || (g_init))
+	if (g_poulailler_porte.curr != g_poulailler_porte.old)
 	{
 	    g_poulailler_porte.old = g_poulailler_porte.curr;
 
 	    /* write in file  */
 	    save_entry("P.txt", g_poulailler_porte.curr, TYPE_PORTE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Poulailler Porte :");Serial.println(g_poulailler_porte.curr);
-#endif
-
 	    wait_a_moment = 1;
 	}
 
 	g_poule_gauche.curr = digitalRead(PIN_POULE_GAUCHE);
-	if ((g_poule_gauche.curr != g_poule_gauche.old) || (g_init))
+	if (g_poule_gauche.curr != g_poule_gauche.old)
 	{
 	    g_poule_gauche.old = g_poule_gauche.curr;
 
 	    /* write in file  */
 	    save_entry("R.txt", g_poule_gauche.curr, TYPE_POULE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Poule gauche :");Serial.println(g_poule_gauche.curr);
-#endif
-
 	    wait_a_moment = 1;
 	}
 
 	g_poule_droite.curr = digitalRead(PIN_POULE_DROITE);
-	if ((g_poule_droite.curr != g_poule_droite.old) || (g_init))
+	if (g_poule_droite.curr != g_poule_droite.old)
 	{
 	    g_poule_droite.old = g_poule_droite.curr;
 
 	    /* write in file  */
 	    save_entry("S.txt", g_poule_droite.curr, TYPE_POULE);
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Poule droite :");Serial.println(g_poule_droite.curr);
-#endif
-
 	    wait_a_moment = 1;
 	}
 
 	g_poulailler.curr = digitalRead(PIN_POULAILLER_HALL);
-	if ((g_poulailler.curr != g_poulailler.old) || (g_init))
+	if (g_poulailler.curr != g_poulailler.old)
 	{
 	    g_poulailler.old = g_poulailler.curr;
 
 	    /* write in file  */
 	    save_entry("T.txt", g_poulailler.curr, TYPE_POULE);
-
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Poulailler :");Serial.println(g_poulailler.curr);
-#endif
 
 	    wait_a_moment = 1;
 	}
@@ -2398,7 +2353,7 @@ void process_domotix(void)
 	 */
 
 	g_garage_lumiere_etabli.curr = analogRead(PIN_GARAGE_LUMIERE_ETABLI);
-	if ( (g_init) || (g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
+	if ((g_garage_lumiere_etabli.curr > (g_garage_lumiere_etabli.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_garage_lumiere_etabli.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere_etabli.old))
 	{
 	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
@@ -2412,7 +2367,7 @@ void process_domotix(void)
 		g_garage_lumiere_etabli.state_curr = 1;
 	    }
 
-	    if ((g_garage_lumiere_etabli.state_curr != g_garage_lumiere_etabli.state_old)  || (g_init))
+	    if (g_garage_lumiere_etabli.state_curr != g_garage_lumiere_etabli.state_old)
 	    {
 		g_garage_lumiere_etabli.state_old = g_garage_lumiere_etabli.state_curr;
 
@@ -2420,15 +2375,12 @@ void process_domotix(void)
 		save_entry("D.txt", g_garage_lumiere_etabli.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage lumiere etabli :");Serial.println(g_garage_lumiere_etabli.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
-	if ( (g_init) || (g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
-	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old))
+	if ( (g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old) )
 	{
 	    g_cellier_lumiere.old = g_cellier_lumiere.curr;
 
@@ -2441,7 +2393,7 @@ void process_domotix(void)
 		g_cellier_lumiere.state_curr = 1;
 	    }
 
-	    if ((g_cellier_lumiere.state_curr != g_cellier_lumiere.state_old) || (g_init))
+	    if (g_cellier_lumiere.state_curr != g_cellier_lumiere.state_old)
 	    {
 		g_cellier_lumiere.state_old = g_cellier_lumiere.state_curr;
 
@@ -2449,15 +2401,12 @@ void process_domotix(void)
 		save_entry("G.txt", g_cellier_lumiere.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Cellier lumiere :");Serial.println(g_cellier_lumiere.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
-	if ( (g_init) || (g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
-	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old))
+	if ( (g_garage_lumiere.curr > (g_garage_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_garage_lumiere.curr + THRESHOLD_CMP_OLD) < g_garage_lumiere.old) )
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
 
@@ -2470,7 +2419,7 @@ void process_domotix(void)
 		g_garage_lumiere.state_curr = 1;
 	    }
 
-	    if ((g_garage_lumiere.state_curr != g_garage_lumiere.state_old) || (g_init))
+	    if (g_garage_lumiere.state_curr != g_garage_lumiere.state_old)
 	    {
 		g_garage_lumiere.state_old = g_garage_lumiere.state_curr;
 
@@ -2478,15 +2427,12 @@ void process_domotix(void)
 		save_entry("I.txt", g_garage_lumiere.state_curr, TYPE_LUMIERE);
 	    }
 
-#ifdef DEBUG_SENSOR
-	    PgmPrint("Garage lumiere :");Serial.println(g_garage_lumiere.curr);
-#endif
 	    wait_a_moment = 1;
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
-	if ( (g_init) || (g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
-	    ((g_lingerie_lumiere.curr + THRESHOLD_CMP_OLD) < g_lingerie_lumiere.old))
+	if ( (g_lingerie_lumiere.curr > (g_lingerie_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_lingerie_lumiere.curr + THRESHOLD_CMP_OLD) < g_lingerie_lumiere.old) )
 	{
 	    g_lingerie_lumiere.old = g_lingerie_lumiere.curr;
 
@@ -2499,7 +2445,7 @@ void process_domotix(void)
 		g_lingerie_lumiere.state_curr = 1;
 	    }
 
-	    if ((g_lingerie_lumiere.state_curr != g_lingerie_lumiere.state_old) || (g_init))
+	    if (g_lingerie_lumiere.state_curr != g_lingerie_lumiere.state_old)
 	    {
 		g_lingerie_lumiere.state_old = g_lingerie_lumiere.state_curr;
 
@@ -2535,9 +2481,6 @@ void process_domotix(void)
 	    /* wait some time, before testing the next time the inputs */
 	    wait_some_time(&g_process_domotix, 500, NULL);
 	}
-
-	/* reset state of init */
-	g_init = 0;
     }
 }
 
@@ -2547,7 +2490,6 @@ void process_domotix_quick(void)
 
     if (g_process_domotix_quick != PROCESS_OFF)
     {
-
 	/* heure creuse ? */
 	if (((g_hour100 > 200) && (g_hour100 < 700)) ||
 	    ((g_hour100 > 1400) && (g_hour100 < 1700)))
@@ -2560,8 +2502,8 @@ void process_domotix_quick(void)
 	}
 
 	edf->curr = analogRead(PIN_EDF);
-	if ( (g_init_quick) || (edf->curr > (edf->old + 8)) ||
-	    ((edf->curr + 8) < edf->old))
+	if ( (edf->curr > (edf->old + 8)) ||
+	    ((edf->curr + 8) < edf->old) )
 	{
 	    edf->old = edf->curr;
 
@@ -2574,7 +2516,7 @@ void process_domotix_quick(void)
 		edf->state_curr = 0;
 	    }
 
-	    if ((edf->state_curr != edf->state_old) || (g_init_quick))
+	    if (edf->state_curr != edf->state_old)
 	    {
 		if (edf->state_curr == 0)
 		{
@@ -2589,9 +2531,6 @@ void process_domotix_quick(void)
 		edf->state_old = edf->state_curr;
 	    }
 	}
-
-	/* reset state of init */
-	g_init_quick = 0;
     }
 }
 
@@ -2670,8 +2609,6 @@ void process_delay(void)
     }
 }
 
-
-
 void process_schedule(void)
 {
     uint8_t  half_month;
@@ -2705,16 +2642,16 @@ void process_schedule(void)
 
 		/* write in file  */
 		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (g_edf_hc.value>>24));
-		EEPROM.write(1, (g_edf_hc.value>>16));
-		EEPROM.write(2, (g_edf_hc.value>>8));
-		EEPROM.write(3, (g_edf_hc.value&0xFF));
+		EEPROM.write(0, (uint8_t)(g_edf_hc.value>>24));
+		EEPROM.write(1, (uint8_t)(g_edf_hc.value>>16));
+		EEPROM.write(2, (uint8_t)(g_edf_hc.value>>8));
+		EEPROM.write(3, (uint8_t)(g_edf_hc.value&0xFF));
 
 		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(4, (g_edf_hp.value>>24));
-		EEPROM.write(5, (g_edf_hp.value>>16));
-		EEPROM.write(6, (g_edf_hp.value>>8));
-		EEPROM.write(7, (g_edf_hp.value&0xFF));
+		EEPROM.write(4, (uint8_t)(g_edf_hp.value>>24));
+		EEPROM.write(5, (uint8_t)(g_edf_hp.value>>16));
+		EEPROM.write(6, (uint8_t)(g_edf_hp.value>>8));
+		EEPROM.write(7, (uint8_t)(g_edf_hp.value&0xFF));
 	    }
 	}
 	else
@@ -2768,15 +2705,6 @@ void process_schedule(void)
 void process_action(void)
 {
     uint8_t action_done;
-    uint8_t is_gsm_ready;
-
-    /* do it every time in order to be sure to be allowed to send msg to GSM */
-    is_gsm_ready = digitalRead(PIN_GSM);
-    if (is_gsm_ready != g_init_gsm)
-    {
-	g_init_gsm = is_gsm_ready;
-	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
-    }
 
     if (g_process_action != PROCESS_ACTION_NONE)
     {
@@ -2817,16 +2745,16 @@ void process_action(void)
 	    {
 		/* write in file  */
 		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (g_edf_hc.value>>24));
-		EEPROM.write(1, (g_edf_hc.value>>16));
-		EEPROM.write(2, (g_edf_hc.value>>8));
-		EEPROM.write(3, (g_edf_hc.value&0xFF));
+		EEPROM.write(0, (uint8_t)(g_edf_hc.value>>24));
+		EEPROM.write(1, (uint8_t)(g_edf_hc.value>>16));
+		EEPROM.write(2, (uint8_t)(g_edf_hc.value>>8));
+		EEPROM.write(3, (uint8_t)(g_edf_hc.value&0xFF));
 
 		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(4, (g_edf_hp.value>>24));
-		EEPROM.write(5, (g_edf_hp.value>>16));
-		EEPROM.write(6, (g_edf_hp.value>>8));
-		EEPROM.write(7, (g_edf_hp.value&0xFF));
+		EEPROM.write(4, (uint8_t)(g_edf_hp.value>>24));
+		EEPROM.write(5, (uint8_t)(g_edf_hp.value>>16));
+		EEPROM.write(6, (uint8_t)(g_edf_hp.value>>8));
+		EEPROM.write(7, (uint8_t)(g_edf_hp.value&0xFF));
 	    }
 	    break;
 	    case PROCESS_ACTION_TIMEZONE:
@@ -2834,10 +2762,10 @@ void process_action(void)
 		if ((g_timezone != 1) && (g_timezone != 2))
 		{
 		    g_timezone = 2;
-		    EEPROM.write(8, g_timezone);
+		    EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
 		}
 		else
-		    EEPROM.write(8, g_timezone);
+		    EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
 	    }
 	    break;
 	    default:
@@ -2858,6 +2786,21 @@ void process_action(void)
 }
 
 
+void process_doit(void)
+{
+    uint8_t is_gsm_ready;
+
+    /* do it every time in order to be sure to be allowed to send msg to GSM */
+    is_gsm_ready = digitalRead(PIN_GSM);
+    if (is_gsm_ready != g_init_gsm)
+    {
+	g_init_gsm = is_gsm_ready;
+	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+	EEPROM.write(EEPROM_ADDR_GSM, g_init_gsm);
+    }
+}
+
+
 void loop(void)
 {
     process_time();
@@ -2871,4 +2814,5 @@ void loop(void)
     process_schedule();
     process_action();
     process_delay();
+    process_doit();
 }
