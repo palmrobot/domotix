@@ -139,12 +139,7 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 /********************************************************/
 /*      EEPROM Addresses                                */
 /********************************************************/
-
-
-
 #define EEPROM_ADDR_TIMEZONE			8
-#define EEPROM_ADDR_GSM				9
-
 
 /********************************************************/
 /*      Process definitions                             */
@@ -505,12 +500,7 @@ void setup(void)
     g_debug = 0;
     g_NTP   = 0;
 
-    g_init_gsm = EEPROM.read(EEPROM_ADDR_GSM);;
-    if ((g_init_gsm != 0) && (g_init_gsm != 1))
-    {
-	g_init_gsm = 0;
-	EEPROM.write(EEPROM_ADDR_GSM, g_init_gsm);
-    }
+    g_init_gsm = 2;
 
     g_timezone = EEPROM.read(EEPROM_ADDR_TIMEZONE);
     if ((g_timezone != 1) && (g_timezone != 2))
@@ -2230,11 +2220,15 @@ void process_domotix(void)
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = */
-		g_garage_fenetre.id = event_set(5000, callback_wait_fenetregarage);
+		//g_garage_fenetre.id = event_set(5000, callback_wait_fenetregarage);
 	    }
 	    else
 	    {
-		event_del(g_garage_fenetre.id);
+		/* Send alerte */
+		g_lampe1 = LAMPE_OFF;
+		digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
+
+		//event_del(g_garage_fenetre.id);
 	    }
 
 	    wait_a_moment = 1;
@@ -2256,7 +2250,7 @@ void process_domotix(void)
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = */
-		g_cellier_porte_ext.id = event_set(300000, callback_wait_portecellier);
+		//g_cellier_porte_ext.id = event_set(300000, callback_wait_portecellier);
 	    }
 	    else
 	    {
@@ -2533,8 +2527,11 @@ void process_domotix(void)
 	{
 	    /* wait some time, before testing the next time the inputs */
 	    g_process_domotix = PROCESS_OFF;
-	    if (event_set(500, callback_wait_pdomotix) == -1)
+	    // if (event_set(500, callback_wait_pdomotix) == -1)
+	    {
 		delay(500);
+		g_process_domotix = PROCESS_ON;
+	    }
 	}
     }
 }
@@ -2869,7 +2866,6 @@ void process_do_it(void)
     {
 	g_init_gsm = is_gsm_ready;
 	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
-	EEPROM.write(EEPROM_ADDR_GSM, g_init_gsm);
     }
 }
 
