@@ -110,6 +110,9 @@ uint8_t g_process_recv_sms;
 /*      Global definitions                              */
 /********************************************************/
 
+#define LAMPE_OFF					1
+#define LAMPE_ON					0
+
 #define GSM_INIT_FAILED					0
 #define GSM_INIT_OK					1
 uint8_t g_gsm_init;
@@ -483,12 +486,12 @@ void process_recv_gsm_sms(void)
 		}
 		else if (strcmp(g_sms_recv_buffer, "Allume la lumiere 1") == 0)
 		{
-		    g_send_to_masterIO[0] = 1;
+		    g_send_to_masterIO[0] = LAMPE_ON;
 		    send_msg_to_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 		else if (strcmp(g_sms_recv_buffer, "Eteint la lumiere 1") == 0)
 		{
-		    g_send_to_masterIO[0] = 0;
+		    g_send_to_masterIO[0] = LAMPE_OFF;
 		    send_msg_to_masterIO(GSM_IO_COMMAND_LIGHT_1, g_send_to_masterIO, 1);
 		}
 	    }
