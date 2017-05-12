@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.07"
+#define VERSION				"v4.08"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -2220,7 +2220,7 @@ void process_domotix(void)
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = */
-		//g_garage_fenetre.id = event_set(5000, callback_wait_fenetregarage);
+		g_garage_fenetre.id = event_add(5000, callback_wait_fenetregarage);
 	    }
 	    else
 	    {
@@ -2228,7 +2228,7 @@ void process_domotix(void)
 		g_lampe1 = LAMPE_OFF;
 		digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
 
-		//event_del(g_garage_fenetre.id);
+		event_del(g_garage_fenetre.id);
 	    }
 
 	    wait_a_moment = 1;
@@ -2250,7 +2250,7 @@ void process_domotix(void)
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = */
-		//g_cellier_porte_ext.id = event_set(300000, callback_wait_portecellier);
+		g_cellier_porte_ext.id = event_add(300000, callback_wait_portecellier);
 	    }
 	    else
 	    {
@@ -2527,7 +2527,7 @@ void process_domotix(void)
 	{
 	    /* wait some time, before testing the next time the inputs */
 	    g_process_domotix = PROCESS_OFF;
-	    // if (event_set(500, callback_wait_pdomotix) == -1)
+	    if (event_add(500, callback_wait_pdomotix) == -1)
 	    {
 		delay(500);
 		g_process_domotix = PROCESS_ON;
@@ -2619,7 +2619,7 @@ void callback_wait_portecellier(void)
     if (g_cellier_porte_ext.curr)
     {
 	/* Send alerte */
-	//send_SMS("La porte exterieur du cellier est ouverte depuis 5min");
+	send_SMS("La porte exterieur du cellier est ouverte depuis 5min");
     }
 }
 
@@ -2639,7 +2639,7 @@ void event_del(int8_t id)
     }
 }
 
-int8_t event_set(uint32_t time_to_wait, callback_delay call_after_delay)
+int8_t event_add(uint32_t time_to_wait, callback_delay call_after_delay)
 {
     int8_t index;
 
@@ -2650,6 +2650,7 @@ int8_t event_set(uint32_t time_to_wait, callback_delay call_after_delay)
 	    g_delay[index].delay_start  = millis();
 	    g_delay[index].cb		= call_after_delay;
 	    g_delay[index].delay_inuse  = 1;
+	    g_delay[index].delay_wait   = time_to_wait;
 	    return index;
 	}
     }
