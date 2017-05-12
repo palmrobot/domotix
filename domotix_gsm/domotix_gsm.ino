@@ -117,10 +117,6 @@ uint8_t g_process_recv_sms;
 #define GSM_INIT_OK					1
 uint8_t g_gsm_init;
 
-#define GSM_CRITICAL_ALERTE_OFF				0
-#define GSM_CRITICAL_ALERTE_ON				1
-uint8_t g_critical_alertes;
-
 void setup()
 {
     boolean not_connected;
@@ -136,7 +132,6 @@ void setup()
 
     /* Init global variables */
     g_gsm_init			= GSM_INIT_FAILED;
-    g_critical_alertes		= GSM_CRITICAL_ALERTE_OFF;
 
     /* init pipes */
     g_recv_masterIO[0]	= 0;
@@ -162,7 +157,7 @@ void setup()
     delay(100);
 
     snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Systeme d'envoi de SMS ready !");
-    send_SMS(g_sms_send_buffer, NICO_NUMBER, 1);
+    send_SMS(g_sms_send_buffer, NICO_NUMBER);
 
     g_gsm_init = GSM_INIT_OK;
     digitalWrite(PIN_OUT_MASTER, 1);
@@ -240,10 +235,8 @@ void send_msg_to_masterIO(uint8_t cmd, uint8_t *buffer, uint8_t size)
     while ((crc != recv_crc) && (nb_retry > 0));
 }
 
-void send_SMS(char *message, const char *phone_number, uint8_t force)
+void send_SMS(char *message, const char *phone_number)
 {
-    if ((g_critical_alertes == GSM_CRITICAL_ALERTE_ON) || (force == 1))
-    {
 	/* send message */
 	g_gsm_sms.beginSMS(phone_number);
 	if (strlen(message) > (CMD_DATA_MAX-1))
@@ -257,8 +250,6 @@ void send_SMS(char *message, const char *phone_number, uint8_t force)
 
 	/* Delete message from modem memory */
 	g_gsm_sms.flush();
-	delay(500);
-    }
 }
 
 
@@ -462,27 +453,23 @@ void process_recv_gsm_sms(void)
 		    else
 			snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Bonjour Estelle !!");
 
-		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
+		    send_SMS(g_sms_send_buffer, g_sender_number);
 		}
 		else if (strcmp(g_sms_recv_buffer, "Stop les alertes") == 0)
 		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les envois d'alertes sont desactivees");
-		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
-
-		    g_critical_alertes = GSM_CRITICAL_ALERTE_OFF;
-
 		    g_send_to_masterIO[0] = 0;
 		    send_msg_to_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
+
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les alertes sont desactivees");
+		    send_SMS(g_sms_send_buffer, g_sender_number);
 		}
 		else if (strcmp(g_sms_recv_buffer, "Demarre les alertes") == 0)
 		{
-		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les alertes sont activees");
-		    send_SMS(g_sms_send_buffer, g_sender_number, 1);
-
-		    g_critical_alertes = GSM_CRITICAL_ALERTE_ON;
-
 		    g_send_to_masterIO[0] = 1;
 		    send_msg_to_masterIO(GSM_IO_COMMAND_CRITICAL_TIME, g_send_to_masterIO, 1);
+
+		    snprintf(g_sms_send_buffer, CMD_DATA_MAX, "Les alertes sont activees");
+		    send_SMS(g_sms_send_buffer, g_sender_number);
 		}
 		else if (strcmp(g_sms_recv_buffer, "Allume la lumiere 1") == 0)
 		{
@@ -497,7 +484,7 @@ void process_recv_gsm_sms(void)
 	    }
 
 	    /* Discard */
-	    delay(500);
+	    delay(200);
 
 	    /* Delete message from modem memory */
 	    g_gsm_sms.flush();
@@ -517,7 +504,7 @@ void process_action(void)
 	{
 	    case PROCESS_ACTION_SMS:
 	    {
-		send_SMS((char*)g_recv_masterIO, NICO_NUMBER, 0);
+		send_SMS((char*)g_recv_masterIO, NICO_NUMBER);
 	    }break;
 	    default:
 	    {

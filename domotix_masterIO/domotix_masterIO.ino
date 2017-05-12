@@ -227,7 +227,6 @@ state_lumiere_s g_edf_hp; /* Y */
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
-uint8_t g_critical_time = 0;
 
 uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
@@ -242,6 +241,10 @@ uint8_t g_lampe4 = LAMPE_OFF;
 /********************************************************/
 /*      GSM global definitions                          */
 /********************************************************/
+
+#define GSM_CRITICAL_ALERTE_OFF				0
+#define GSM_CRITICAL_ALERTE_ON				1
+uint8_t g_critical_alertes;
 
 /********************************************************/
 /*      Ethernet global definitions                     */
@@ -501,6 +504,7 @@ void setup(void)
     g_NTP   = 0;
 
     g_init_gsm = 2;
+    g_critical_alertes = 0;
 
     g_timezone = EEPROM.read(EEPROM_ADDR_TIMEZONE);
     if ((g_timezone != 1) && (g_timezone != 2))
@@ -675,15 +679,19 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 }
 
 /** Store a string in flash memory.*/
-#define send_SMS(x) send_SMS_P(PSTR(x))
+#define send_SMS(x) send_SMS_P(PSTR(x), 0)
+#define send_SMS_alerte(x) send_SMS_P(PSTR(x), 1)
 
-void send_SMS_P(PGM_P str)
+void send_SMS_P(PGM_P str, uint8_t alerte)
 {
     uint8_t i;
     uint8_t len;
 
     if (g_init_gsm == 0)
   	return;
+
+    if ((alerte) && (g_critical_alertes == 0))
+	return;
 
     len = strlen_P(str);
     if (len > 0)
@@ -898,7 +906,7 @@ void deal_with_code(char item, char type, char code)
 	break;
 	case 'w':
 	{
-	    if (g_critical_time)
+	    if (g_critical_alertes)
 	    {
 		g_client.print(F("Systeme d'alertes : actif"));
 	    }
@@ -2176,7 +2184,7 @@ void process_domotix(void)
 	    if (g_garage_droite.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La porte de droite du garage vient de s'ouvrir");
+		send_SMS_alerte("La porte de droite du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2194,7 +2202,7 @@ void process_domotix(void)
 	    if (g_garage_gauche.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La porte de gauche du garage vient de s'ouvrir");
+		send_SMS_alerte("La porte de gauche du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2212,23 +2220,7 @@ void process_domotix(void)
 	    if (g_garage_fenetre.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La fenetre du garage vient de s'ouvrir");
-
-		/* Send alerte */
-		g_lampe1 = LAMPE_ON;
-		digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
-
-		/* Arm event to avoid openning the door too long */
-		/* 5min maxi 5*60*1000 = */
-		g_garage_fenetre.id = event_add(5000, callback_wait_fenetregarage);
-	    }
-	    else
-	    {
-		/* Send alerte */
-		g_lampe1 = LAMPE_OFF;
-		digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
-
-		event_del(g_garage_fenetre.id);
+		send_SMS_alerte("La fenetre du garage vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2246,7 +2238,7 @@ void process_domotix(void)
 	    if (g_cellier_porte_ext.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La porte exterieure du cellier vient de s'ouvrir");
+		send_SMS_alerte("La porte exterieure du cellier vient de s'ouvrir");
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = */
@@ -2305,7 +2297,7 @@ void process_domotix(void)
 	    if (g_cuisine_porte_ext.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La porte exterieure de la cuisine vient de s'ouvrir");
+		send_SMS_alerte("La porte exterieure de la cuisine vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2323,7 +2315,7 @@ void process_domotix(void)
 	    if (g_lingerie_fenetre.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La Fenetre de la lingerie vient de s'ouvrir");
+		send_SMS_alerte("La Fenetre de la lingerie vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2341,7 +2333,7 @@ void process_domotix(void)
 	    if (g_entree_porte_ext.curr == 0)
 	    {
 		/* Send SMS */
-		send_SMS("La porte d'entree vient de s'ouvrir");
+		send_SMS_alerte("La porte d'entree vient de s'ouvrir");
 	    }
 
 	    wait_a_moment = 1;
@@ -2616,20 +2608,9 @@ void callback_wait_pdomotix(void)
 
 void callback_wait_portecellier(void)
 {
-    if (g_cellier_porte_ext.curr)
-    {
-	/* Send alerte */
-	send_SMS("La porte exterieur du cellier est ouverte depuis 5min");
-    }
-}
-
-void callback_wait_fenetregarage(void)
-{
     /* Send alerte */
-    g_lampe1 = LAMPE_OFF;
-    digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
+    send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
 }
-
 
 void event_del(int8_t id)
 {
@@ -2797,11 +2778,11 @@ void process_action(void)
 	    {
 		if (g_recv_gsm[0] == 0)
 		{
-		    g_critical_time = 0;
+		    g_critical_alertes = 0;
 		}
 		else
 		{
-		    g_critical_time = 1;
+		    g_critical_alertes = 1;
 		}
 	    }
 	    break;
