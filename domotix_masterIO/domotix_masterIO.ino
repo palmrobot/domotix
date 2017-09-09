@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.10"
+#define VERSION				"v4.11"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -53,7 +53,7 @@
 /* lampe4 */				   /* e */
 /* hc */				   /* f */
 /* hp */				   /* g */
-#define PIN_OUT_BUZZER			42 /* h */
+#define PIN_OUT_BUZZER			44 /* h */
 
 
 #define PIN_OUT_EDF			36
@@ -293,6 +293,7 @@ typedef struct
 #define WEB_CODE_CLASS_POULE	'5'
 #define WEB_CODE_POULE		'6'
 #define WEB_CODE_CHECKED	'7'
+#define WEB_CODE_CRITICAL	'8'
 
 
 #define TYPE_PORTE		0
@@ -302,6 +303,7 @@ typedef struct
 #define TYPE_CLASS_POULE	4
 #define TYPE_POULE		5
 #define TYPE_CHECKED		6
+#define TYPE_CRITICAL		7
 
 code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
@@ -309,7 +311,8 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Ouvert", "Ferme"}, /* TYPE_VOLET */
 		    {"vi", "po"}, /* TYPE_CLASS_POULE */
 		    {"Vide", "Poule"}, /* TYPE_POULE */
-		    {"checked", ""}}; /* TYPE_CHECKED */
+		    {"checked", ""}, /* TYPE_CHECKED */
+		    {"cr", "ok"}}; /* TYPE_CRITIQUE */
 
 /*
  * 12/12/14
@@ -476,7 +479,7 @@ void setup(void)
     digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
     digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
-    digitalWrite(PIN_OUT_BUZZER, 0);
+    analogWrite(PIN_OUT_BUZZER, 0);
 
     /* init Process */
 #ifdef DEBUG
@@ -831,6 +834,10 @@ void deal_with_code(char item, char type, char code)
 	case WEB_CODE_CHECKED:
 	{
 	    ptr_code = &g_code[TYPE_CHECKED];
+	}break;
+	case WEB_CODE_CRITICAL:
+	{
+	    ptr_code = &g_code[TYPE_CRITICAL];
 	}break;
 	default:
 	{
@@ -2277,7 +2284,7 @@ void process_domotix(void)
 		event_del(&g_evt_cellier_porte_ext_open);
 		event_del(&g_evt_buzz_before5min_off);
 		event_del(&g_evt_buzz_before5min_on);
-		digitalWrite(PIN_OUT_BUZZER, 0);
+		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 	    }
 
@@ -2642,7 +2649,7 @@ void callback_wait_pdomotix(void)
 void callback_buzz_portecellier_on(void)
 {
     /* Active Buzzer */
-    digitalWrite(PIN_OUT_BUZZER, 1);
+    analogWrite(PIN_OUT_BUZZER, 220);
     g_evt_buzz_before5min_off.timeout = 1000;
     event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off);
 }
@@ -2650,7 +2657,7 @@ void callback_buzz_portecellier_on(void)
 void callback_buzz_portecellier_off(void)
 {
     /* Stop buzzer */
-    digitalWrite(PIN_OUT_BUZZER, 0);
+    analogWrite(PIN_OUT_BUZZER, 0);
     g_evt_buzz_before5min_on.timeout = 500;
     event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
 }
@@ -2661,7 +2668,7 @@ void callback_wait_portecellier(void)
     event_del(&g_evt_buzz_before5min_off);
     event_del(&g_evt_buzz_before5min_on);
     send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
-    digitalWrite(PIN_OUT_BUZZER, 1);
+    analogWrite(PIN_OUT_BUZZER, 1);
 }
 
 void event_del(event_t *event)
