@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.08"
+#define VERSION				"v4.10"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -53,6 +53,7 @@
 /* lampe4 */				   /* e */
 /* hc */				   /* f */
 /* hp */				   /* g */
+#define PIN_OUT_BUZZER			42 /* h */
 
 
 #define PIN_OUT_EDF			36
@@ -354,6 +355,10 @@ char  g_clock[9];
 char  g_date[9];
 uint8_t g_init_gsm = 0;
 
+/********************************************************/
+/*      Delay & Timers			                */
+/********************************************************/
+
 typedef void (*callback_delay) (void);
 
 typedef struct
@@ -367,6 +372,17 @@ typedef struct
 
 #define NB_DELAY_MAX			10
 delay_t g_delay[NB_DELAY_MAX];
+
+typedef struct
+{
+    uint8_t  id;
+    uint32_t timeout;
+}event_t;
+
+event_t g_evt_buzz_before5min_on;
+event_t g_evt_buzz_before5min_off;
+event_t g_evt_cellier_porte_ext_open;
+event_t g_evt_process_domotix;
 
 /********************************************************/
 /*      NTP			                        */
@@ -446,6 +462,7 @@ void setup(void)
     pinMode(PIN_OUT_LAMPE_4, OUTPUT);
     pinMode(PIN_OUT_GSM_INIT, OUTPUT);
     pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
+    pinMode(PIN_OUT_BUZZER, OUTPUT);
 
     g_lampe1 = LAMPE_OFF;
     g_lampe2 = LAMPE_OFF;
@@ -459,6 +476,7 @@ void setup(void)
     digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
     digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
+    digitalWrite(PIN_OUT_BUZZER, 0);
 
     /* init Process */
 #ifdef DEBUG
@@ -2186,6 +2204,8 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La porte de droite du garage vient de s'ouvrir");
 	    }
+	    else
+		send_SMS_alerte("La porte de droite du garage vient de se fermer");
 
 	    wait_a_moment = 1;
 	}
@@ -2204,6 +2224,8 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La porte de gauche du garage vient de s'ouvrir");
 	    }
+	    else
+		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
 
 	    wait_a_moment = 1;
 	}
@@ -2222,6 +2244,8 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La fenetre du garage vient de s'ouvrir");
 	    }
+	    else
+		send_SMS_alerte("La fenetre du garage vient de se fermer");
 
 	    wait_a_moment = 1;
 	}
@@ -2241,12 +2265,20 @@ void process_domotix(void)
 		send_SMS_alerte("La porte exterieure du cellier vient de s'ouvrir");
 
 		/* Arm event to avoid openning the door too long */
-		/* 5min maxi 5*60*1000 = */
-		g_cellier_porte_ext.id = event_add(300000, callback_wait_portecellier);
+		/* 5min maxi 5*60*1000 = 300000*/
+		g_evt_cellier_porte_ext_open.timeout = 300000;
+		event_add(&g_evt_cellier_porte_ext_open, callback_wait_portecellier);
+
+		g_evt_buzz_before5min_on.timeout = 1000;
+		event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
 	    }
 	    else
 	    {
-		event_del(g_cellier_porte_ext.id);
+		event_del(&g_evt_cellier_porte_ext_open);
+		event_del(&g_evt_buzz_before5min_off);
+		event_del(&g_evt_buzz_before5min_on);
+		digitalWrite(PIN_OUT_BUZZER, 0);
+		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 	    }
 
 	    wait_a_moment = 1;
@@ -2317,6 +2349,8 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La Fenetre de la lingerie vient de s'ouvrir");
 	    }
+	    else
+		send_SMS_alerte("La Fenetre de la lingerie vient de se fermer");
 
 	    wait_a_moment = 1;
 	}
@@ -2335,6 +2369,8 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La porte d'entree vient de s'ouvrir");
 	    }
+	    else
+		send_SMS_alerte("La porte d'entree vient de se fermer");
 
 	    wait_a_moment = 1;
 	}
@@ -2519,11 +2555,8 @@ void process_domotix(void)
 	{
 	    /* wait some time, before testing the next time the inputs */
 	    g_process_domotix = PROCESS_OFF;
-	    if (event_add(500, callback_wait_pdomotix) == -1)
-	    {
-		delay(500);
-		g_process_domotix = PROCESS_ON;
-	    }
+	    g_evt_process_domotix.timeout = 1000;
+	    event_add(&g_evt_process_domotix, callback_wait_pdomotix);
 	}
     }
 }
@@ -2606,21 +2639,40 @@ void callback_wait_pdomotix(void)
     g_process_domotix = PROCESS_ON;
 }
 
+void callback_buzz_portecellier_on(void)
+{
+    /* Active Buzzer */
+    digitalWrite(PIN_OUT_BUZZER, 1);
+    g_evt_buzz_before5min_off.timeout = 1000;
+    event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off);
+}
+
+void callback_buzz_portecellier_off(void)
+{
+    /* Stop buzzer */
+    digitalWrite(PIN_OUT_BUZZER, 0);
+    g_evt_buzz_before5min_on.timeout = 500;
+    event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
+}
+
 void callback_wait_portecellier(void)
 {
     /* Send alerte */
+    event_del(&g_evt_buzz_before5min_off);
+    event_del(&g_evt_buzz_before5min_on);
     send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
+    digitalWrite(PIN_OUT_BUZZER, 1);
 }
 
-void event_del(int8_t id)
+void event_del(event_t *event)
 {
-    if ((id >= 0) && (id < NB_DELAY_MAX))
+    if ((event->id >= 0) && (event->id < NB_DELAY_MAX))
     {
-	g_delay[id].delay_inuse = 0;
+	g_delay[event->id].delay_inuse = 0;
     }
 }
 
-int8_t event_add(uint32_t time_to_wait, callback_delay call_after_delay)
+void event_add(event_t *event, callback_delay call_after_delay)
 {
     int8_t index;
 
@@ -2631,12 +2683,19 @@ int8_t event_add(uint32_t time_to_wait, callback_delay call_after_delay)
 	    g_delay[index].delay_start  = millis();
 	    g_delay[index].cb		= call_after_delay;
 	    g_delay[index].delay_inuse  = 1;
-	    g_delay[index].delay_wait   = time_to_wait;
-	    return index;
+	    g_delay[index].delay_wait   = event->timeout;
+	    event->id = index;
+	    return;
 	}
     }
-
-    return -1;
+    /* If there's no more buffer available, then wait and call CB
+     */
+    delay(event->timeout);
+    if (call_after_delay != NULL)
+    {
+	call_after_delay();
+    }
+    return;
 }
 
 
@@ -2647,11 +2706,11 @@ void process_delay(void)
 
     if (g_process_delay != PROCESS_OFF)
     {
+	current_millis = millis();
 	for(index = 0; index < NB_DELAY_MAX; index++)
 	{
 	    if (g_delay[index].delay_inuse)
 	    {
-		current_millis = millis();
 		if ((current_millis - g_delay[index].delay_start) > g_delay[index].delay_wait)
 		{
 		    /* call CB
