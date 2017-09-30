@@ -11,7 +11,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.11"
+#define VERSION				"v4.20"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -54,7 +54,10 @@
 /* hc */				   /* f */
 /* hp */				   /* g */
 #define PIN_OUT_BUZZER			44 /* h */
-
+/* temp day min */			   /* i */
+/* temp day max */			   /* j */
+/* temp year min */			   /* i */
+/* temp year max */			   /* j */
 
 #define PIN_OUT_EDF			36
 #define PIN_OUT_GSM_INIT		37
@@ -238,6 +241,16 @@ uint8_t g_lampe1 = LAMPE_OFF;
 uint8_t g_lampe2 = LAMPE_OFF;
 uint8_t g_lampe3 = LAMPE_OFF;
 uint8_t g_lampe4 = LAMPE_OFF;
+
+
+int8_t g_temperature_daymin = 60;
+int8_t g_temperature_daymax = -60;
+int8_t g_temperature_yearmin = 60;
+int8_t g_temperature_yearmax = -60;
+char  g_tempdaymin_string[15]; /* 27°C à 17h32 */
+char  g_tempdaymax_string[15];
+char  g_tempyearmin_string[25]; /* 27°C à 17h32 le 23/03 */
+char  g_tempyearmax_string[25];
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -598,11 +611,16 @@ void setup(void)
 
     g_edf_hc.old = 999999;
     g_edf_hc.id = -1;
-    g_edf_hc.value = EEPROM.read(0)<<24 + EEPROM.read(1)<<16 + EEPROM.read(2)<<24 + EEPROM.read(3);
+    g_edf_hc.value = EEPROM.read(0)<<24 + EEPROM.read(1)<<16 + EEPROM.read(2)<<8 + EEPROM.read(3);
 
     g_edf_hp.old = 999999;
     g_edf_hp.id = -1;
-    g_edf_hp.value = EEPROM.read(4)<<24 + EEPROM.read(5)<<16 + EEPROM.read(6)<<24 + EEPROM.read(7);
+    g_edf_hp.value = EEPROM.read(4)<<24 + EEPROM.read(5)<<16 + EEPROM.read(6)<<8 + EEPROM.read(7);
+
+    g_temperature_daymin = 60;
+    g_temperature_daymax = -60;
+    g_temperature_yearmin = 60;
+    g_temperature_yearmax = -60;
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -927,6 +945,26 @@ void deal_with_code(char item, char type, char code)
 	    {
 		g_client.print(F("checked"));
 	    }
+	}
+	break;
+	case 'i':
+	{
+	    g_client.print(g_tempdaymin_string);
+	}
+	break;
+	case 'j':
+	{
+	    g_client.print(g_tempdaymax_string);
+	}
+	break;
+	case 'k':
+	{
+	    g_client.print(g_tempyearmin_string);
+	}
+	break;
+	case 'l':
+	{
+	    g_client.print(g_tempyearmax_string);
 	}
 	break;
 	case 'w':
@@ -2558,6 +2596,28 @@ void process_domotix(void)
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
 	g_temperature_ext.curr = ((500.0 * (value - value_offset)) / 1024) - 2;
 
+	if (g_temperature_ext.curr < g_temperature_daymin)
+	{
+	    g_temperature_daymin = g_temperature_ext.curr;
+	    sprintf(g_tempdaymin_string,"%02d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
+	}
+	else if (g_temperature_ext.curr > g_temperature_daymax)
+	{
+	    g_temperature_daymax = g_temperature_ext.curr;
+	    sprintf(g_tempdaymax_string,"%02d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
+	}
+
+	if (g_temperature_ext.curr < g_temperature_yearmin)
+	{
+	    g_temperature_yearmin = g_temperature_ext.curr;
+	    sprintf(g_tempyearmin_string,"%02d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
+	}
+	else if (g_temperature_ext.curr > g_temperature_yearmax)
+	{
+	    g_temperature_yearmax = g_temperature_ext.curr;
+	    sprintf(g_tempyearmax_string,"%02d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	}
+
 	if (wait_a_moment)
 	{
 	    /* wait some time, before testing the next time the inputs */
@@ -2754,6 +2814,20 @@ void process_schedule(void)
 	else
 	{
 	    g_sched_temperature = 0;
+	}
+
+	/* reset temperature of the day at midnight */
+	if (g_hour100 == 0)
+	{
+	    g_temperature_daymin = 60;
+	    g_temperature_daymax = -60;
+	}
+
+	/* reset temperature of the year at first january */
+	if ((g_hour100 == 0) && (g_day == 1) && (g_mon == 1))
+	{
+	    g_temperature_yearmin = 60;
+	    g_temperature_yearmax = -60;
 	}
 
 	/*************************************/

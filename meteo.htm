@@ -1,0 +1,161 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html >
+<head>
+<title>Domotix</title>
+<STYLE type="text/css">
+<!--
+.main
+{
+margin:auto;
+width:1000px;
+height:900px;
+background-color:#404652;
+color:white;
+}
+.piece_grande
+{
+text-align:left;
+width:490px;
+height:160px;
+}
+.piece_petite
+{
+text-align:left;
+width:490px;
+height:100px;
+}
+h2
+{
+text-align:center;
+color:#7AD1FA;
+margin-top: 15px;
+margin-bottom: 0px;
+}
+h3
+{
+text-align:center;
+color:grey;
+margin-top: 0px;
+margin-bottom: 20px;
+}
+h4
+{
+text-align:center;
+color:#D11E1E;
+margin-top: 10px;
+margin-bottom: 10px;
+}
+.table_piece
+{
+margin-left:auto;
+margin-right:auto;
+width:250px;
+border-collapse:collapse;
+}
+.bas
+{
+text-align:center;
+color:#8AADFA;
+border:0px;
+height:100px;
+}
+.inter
+{
+height:30px;
+}
+.ko
+{
+color:#F0C000;
+text-align: center;
+border:1px solid white;
+}
+.cr
+{
+color:#F04000;
+font-weight:bold;
+text-align: center;
+border:1px solid white;
+}
+.ok
+{
+text-align: center;
+}
+.po
+{
+color:#298A08;
+font-weight:bold;
+text-align: center;
+border:1px solid white;
+}
+.vi
+{
+text-align: center;
+}
+-->
+</style>
+</head>
+<body>
+<div class="main">
+<table>
+<h2 style="color:white">Système de surveillance
+domotique</br><a href="infrx.htm" style="text-decoration:none;color:white">DOMOTIX</a></h2>
+<h4>$w00</h4>
+<h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a></h3>
+<table class="table_piece">
+<tr>
+<td>
+<div class="piece_petite">
+<a href="temp.htm" style="text-decoration:none;"><h2>Températures</h2></a>
+<table class="table_piece">
+<tr><td>Min du jour :</td><td class="$i03">$i00</td></tr>
+<tr><td>Max du jour :</td><td class="$j03">$j00</td></tr>
+<tr><td>Min de l'année :</td><td class="$k03">$k00</td></tr>
+<tr><td>Max de l'année :</td><td class="$l03">$l00</td></tr>
+</table>
+</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="piece_petite">
+<a href="pluie.htm" style="text-decoration:none;"><h2>Pluviometrie</h2></a>
+<table class="table_piece">
+<tr><td>Aujourd'hui      :</td><td class="$m03">$m00</td></tr>
+<tr><td>Hier :</td><td class="$n03">$n00</td></tr>
+<tr><td>Avant hier :</td><td class="$o03">$o00</td></tr>
+</table>
+</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="piece_petite">
+<a href="vitesse.htm" style="text-decoration:none;"><h2>Vitesse de vent</h2></a>
+<table class="table_piece">
+<tr><td>Vitesse :</td><td class="$p03">$p00</td></tr>
+<tr><td>Max du jour :</td><td class="$q03">$q00</td></tr>
+<tr><td>Max de l'année :</td><td class="$r03">$r00</td></tr>
+</table>
+</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="piece_petite">
+<a href="sens.htm" style="text-decoration:none;"><h2>Orientation du vent</h2></a>
+<table class="table_piece">
+<tr><td>Sens du vent :</td><td class="$s03">$s00</td></tr>
+</table>
+</div>
+</td>
+</tr>
+<tr>
+<td colspan="2" class="bas">
+Domotix $x00: developped by PalmRobot - 2014 - All rights reserved</br>
+Connexion de l'adresse IP : $Z00
+</td>
+</tr>
+</table>
+</div>
+</body>
+</html>
