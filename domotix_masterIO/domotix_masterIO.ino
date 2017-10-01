@@ -5,13 +5,15 @@
 #include <Ethernet.h>
 #include <EEPROM.h>
 
-/* #define DEBUG */
+#define DEBUG
+#define DEBUG_EDF
+/* #define DEBUG_EDF*/
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.20"
+#define VERSION				"v4.22"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -34,6 +36,7 @@
 #define PIN_LINGERIE_CUISINE		3 /* K */
 #define PIN_GARAGE_FOND			2 /* H */
 #define PIN_CUISINE_EXT			12 /* L */
+/* temperature exte */			   /* M & U */
 #define PIN_LINGERIE_FENETRE		11 /* N */
 #define PIN_ENTREE_PORTE_EXT		13 /* O */
 #define PIN_OUT_POULAILLER_ACTION	14 /* blue */
@@ -51,8 +54,8 @@
 /* lampe2 */				   /* c */
 /* lampe3 */				   /* d */
 /* lampe4 */				   /* e */
-/* hc */				   /* f */
-/* hp */				   /* g */
+/* ?????? */				   /* f */
+/* ?????? */				   /* g */
 #define PIN_OUT_BUZZER			44 /* h */
 /* temp day min */			   /* i */
 /* temp day max */			   /* j */
@@ -209,7 +212,6 @@ state_lumiere_s g_garage_lumiere; /* I */
 state_lumiere_s g_lingerie_lumiere; /* J */
 state_porte_s g_lingerie_porte_cuisine; /* K */
 state_porte_s g_cuisine_porte_ext; /* L */
-state_lumiere_s g_temperature_ext; /* M & U */
 state_porte_s g_lingerie_fenetre; /* N */
 state_porte_s g_entree_porte_ext; /* O */
 state_porte_s g_poulailler_porte; /* P */
@@ -242,7 +244,7 @@ uint8_t g_lampe2 = LAMPE_OFF;
 uint8_t g_lampe3 = LAMPE_OFF;
 uint8_t g_lampe4 = LAMPE_OFF;
 
-
+int8_t g_temperature_ext;
 int8_t g_temperature_daymin = 60;
 int8_t g_temperature_daymax = -60;
 int8_t g_temperature_yearmin = 60;
@@ -922,18 +924,6 @@ void deal_with_code(char item, char type, char code)
 	    }
 	}
 	break;
-	case 'f':
-	{
-	    /* hc */
-	    g_client.print(g_edf_hc.value);
-	}
-	break;
-	case 'g':
-	{
-	    /* hp */
-	    g_client.print(g_edf_hp.value);
-	}
-	break;
 	case 'h':
 	{
 	    /* action timezone */
@@ -1084,7 +1074,7 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'M':
 	{
-	    g_client.print(g_temperature_ext.curr);
+	    g_client.print(g_temperature_ext);
 	}break;
 	case 'N':
 	{
@@ -1126,7 +1116,7 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'W':
 	{
-	    g_client.print(g_edf_hc.value);
+	    g_client.print(g_edf_hc.value/1000);
 	}break;
 	case 'X':
 	{
@@ -1134,7 +1124,7 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'Y':
 	{
-	    g_client.print(g_edf_hp.value);
+	    g_client.print(g_edf_hp.value/1000);
 	}break;
 	case 'Z':
 	{
@@ -1730,7 +1720,7 @@ void process_ethernet(void)
 				    save_char = *end_paramstr;
 				    *end_paramstr = '\0';
 
-				    g_edf_hc.value = strtoul(paramstr+3, NULL, 10);
+				    g_edf_hc.value = strtoul(paramstr+3, NULL, 10) * 1000;
 				    g_process_action = PROCESS_ACTION_EDF;
 				    *end_paramstr = save_char;
 				}
@@ -1744,7 +1734,7 @@ void process_ethernet(void)
 				    save_char = *end_paramstr;
 				    *end_paramstr = '\0';
 
-				    g_edf_hp.value   = strtoul(paramstr+3, NULL, 10);
+				    g_edf_hp.value   = strtoul(paramstr+3, NULL, 10) * 1000;
 				    g_process_action = PROCESS_ACTION_EDF;
 				    *end_paramstr    = save_char;
 				}
@@ -1791,7 +1781,7 @@ void process_ethernet(void)
 		    /* check if filename is a keyword */
 		    if (strcmp(g_filename.name, "temp_ext") == 0)
 		    {
-			g_client.print(g_temperature_ext.curr);
+			g_client.print(g_temperature_ext);
 		    }
 		    else if (strcmp(g_filename.name, "garage") == 0)
 		    {
@@ -2594,28 +2584,32 @@ void process_domotix(void)
 
 	value     = analogRead(PIN_TEMP_EXT);
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
-	g_temperature_ext.curr = ((500.0 * (value - value_offset)) / 1024) - 2;
+	g_temperature_ext = ((500.0 * (value - value_offset)) / 1024) - 2;
 
-	if (g_temperature_ext.curr < g_temperature_daymin)
+#ifdef DEBUG_TEMP
+	Serial.println("garage = %d, ext = %d", g_temperature_garage.curr, g_temperature_ext);
+#endif
+
+	if (g_temperature_ext < g_temperature_daymin)
 	{
-	    g_temperature_daymin = g_temperature_ext.curr;
-	    sprintf(g_tempdaymin_string,"%02d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
+	    g_temperature_daymin = g_temperature_ext;
+	    sprintf(g_tempdaymin_string,"%d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
 	}
-	else if (g_temperature_ext.curr > g_temperature_daymax)
+	else if (g_temperature_ext > g_temperature_daymax)
 	{
-	    g_temperature_daymax = g_temperature_ext.curr;
-	    sprintf(g_tempdaymax_string,"%02d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
+	    g_temperature_daymax = g_temperature_ext;
+	    sprintf(g_tempdaymax_string,"%d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
 	}
 
-	if (g_temperature_ext.curr < g_temperature_yearmin)
+	if (g_temperature_ext < g_temperature_yearmin)
 	{
-	    g_temperature_yearmin = g_temperature_ext.curr;
-	    sprintf(g_tempyearmin_string,"%02d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
+	    g_temperature_yearmin = g_temperature_ext;
+	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
 	}
-	else if (g_temperature_ext.curr > g_temperature_yearmax)
+	else if (g_temperature_ext > g_temperature_yearmax)
 	{
-	    g_temperature_yearmax = g_temperature_ext.curr;
-	    sprintf(g_tempyearmax_string,"%02d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	    g_temperature_yearmax = g_temperature_ext;
+	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
 	}
 
 	if (wait_a_moment)
@@ -2646,12 +2640,17 @@ void process_domotix_quick(void)
 	}
 
 	edf->curr = analogRead(PIN_EDF);
-	if ( (edf->curr > (edf->old + 8)) ||
-	    ((edf->curr + 8) < edf->old) )
+
+#ifdef DEBUG_EDF
+	Serial.println(edf->curr);
+#endif
+
+	if ( (edf->curr > (edf->old + 80)) ||
+	    ((edf->curr + 80) < edf->old) )
 	{
 	    edf->old = edf->curr;
 
-	    if (edf->curr > 8)
+	    if (edf->curr > 100)
 	    {
 		edf->state_curr = 1;
 	    }
@@ -2808,7 +2807,7 @@ void process_schedule(void)
 		g_sched_temperature = 1;
 
 		/* write in file  */
-		save_entry_temp("M.txt", g_temperature_ext.curr);
+		save_entry_temp("M.txt", g_temperature_ext);
 	    }
 	}
 	else
