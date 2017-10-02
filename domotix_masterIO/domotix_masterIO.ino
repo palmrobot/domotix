@@ -1,3 +1,5 @@
+/*#include <DateTime.h>
+  #include <DateTimeStrings.h>*/
 #include <avr/pgmspace.h>
 #include <SPI.h>
 #include <Time.h>
@@ -5,8 +7,9 @@
 #include <Ethernet.h>
 #include <EEPROM.h>
 
-#define DEBUG
-#define DEBUG_EDF
+/*#define DEBUG
+#define DEBUG_TEMP
+#define DEBUG_EVT*/
 /* #define DEBUG_EDF*/
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
@@ -2218,11 +2221,9 @@ void save_entry_temp(const char *file, uint16_t value)
 
 void process_domotix(void)
 {
-    uint8_t wait_a_moment;
     uint16_t value;
     uint16_t value_offset;
 
-    wait_a_moment = 0;
     if (g_process_domotix != PROCESS_OFF)
     {
 	g_garage_droite.curr =  digitalRead(PIN_GARAGE_DROITE);
@@ -2241,8 +2242,6 @@ void process_domotix(void)
 	    }
 	    else
 		send_SMS_alerte("La porte de droite du garage vient de se fermer");
-
-	    wait_a_moment = 1;
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
@@ -2261,8 +2260,6 @@ void process_domotix(void)
 	    }
 	    else
 		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
-
-	    wait_a_moment = 1;
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
@@ -2281,8 +2278,6 @@ void process_domotix(void)
 	    }
 	    else
 		send_SMS_alerte("La fenetre du garage vient de se fermer");
-
-	    wait_a_moment = 1;
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
@@ -2315,8 +2310,6 @@ void process_domotix(void)
 		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	g_cellier_porte.curr =  digitalRead(PIN_CELLIER_PORTE_INT);
@@ -2326,8 +2319,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("F.txt", g_cellier_porte.curr, TYPE_PORTE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_lingerie_porte_cuisine.curr =  digitalRead(PIN_LINGERIE_CUISINE);
@@ -2337,8 +2328,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("K.txt", g_lingerie_porte_cuisine.curr, TYPE_PORTE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_garage_porte.curr =  digitalRead(PIN_GARAGE_FOND);
@@ -2348,8 +2337,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("H.txt", g_garage_porte.curr, TYPE_PORTE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
@@ -2366,8 +2353,6 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de s'ouvrir");
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	g_lingerie_fenetre.curr = digitalRead(PIN_LINGERIE_FENETRE);
@@ -2386,8 +2371,6 @@ void process_domotix(void)
 	    }
 	    else
 		send_SMS_alerte("La Fenetre de la lingerie vient de se fermer");
-
-	    wait_a_moment = 1;
 	}
 
 	g_entree_porte_ext.curr = digitalRead(PIN_ENTREE_PORTE_EXT);
@@ -2406,8 +2389,6 @@ void process_domotix(void)
 	    }
 	    else
 		send_SMS_alerte("La porte d'entree vient de se fermer");
-
-	    wait_a_moment = 1;
 	}
 
 	g_poulailler_porte.curr = digitalRead(PIN_POULAILLER_PORTE);
@@ -2417,8 +2398,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("P.txt", g_poulailler_porte.curr, TYPE_PORTE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_poule_gauche.curr = digitalRead(PIN_POULE_GAUCHE);
@@ -2428,8 +2407,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("R.txt", g_poule_gauche.curr, TYPE_POULE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_poule_droite.curr = digitalRead(PIN_POULE_DROITE);
@@ -2439,8 +2416,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("S.txt", g_poule_droite.curr, TYPE_POULE);
-
-	    wait_a_moment = 1;
 	}
 
 	g_poulailler.curr = digitalRead(PIN_POULAILLER_HALL);
@@ -2450,8 +2425,6 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("T.txt", g_poulailler.curr, TYPE_POULE);
-
-	    wait_a_moment = 1;
 	}
 
 
@@ -2487,8 +2460,6 @@ void process_domotix(void)
 		/* write in file  */
 		save_entry("D.txt", g_garage_lumiere_etabli.state_curr, TYPE_LUMIERE);
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
@@ -2513,8 +2484,6 @@ void process_domotix(void)
 		/* write in file  */
 		save_entry("G.txt", g_cellier_lumiere.state_curr, TYPE_LUMIERE);
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	g_garage_lumiere.curr =  analogRead(PIN_GARAGE_LUMIERE);
@@ -2539,8 +2508,6 @@ void process_domotix(void)
 		/* write in file  */
 		save_entry("I.txt", g_garage_lumiere.state_curr, TYPE_LUMIERE);
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	g_lingerie_lumiere.curr =  analogRead(PIN_LINGERIE_LUMIERE);
@@ -2565,8 +2532,6 @@ void process_domotix(void)
 		/* write in file  */
 		save_entry("J.txt", g_lingerie_lumiere.state_curr, TYPE_LUMIERE);
 	    }
-
-	    wait_a_moment = 1;
 	}
 
 	/* ================================
@@ -2587,7 +2552,11 @@ void process_domotix(void)
 	g_temperature_ext = ((500.0 * (value - value_offset)) / 1024) - 2;
 
 #ifdef DEBUG_TEMP
-	Serial.println("garage = %d, ext = %d", g_temperature_garage.curr, g_temperature_ext);
+	Serial.println(g_clock);
+	Serial.print("garage = ");
+	Serial.print(g_temperature_garage.curr);
+	Serial.print(" ext = ");
+	Serial.println(g_temperature_ext);
 #endif
 
 	if (g_temperature_ext < g_temperature_daymin)
@@ -2612,13 +2581,14 @@ void process_domotix(void)
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
 	}
 
-	if (wait_a_moment)
-	{
-	    /* wait some time, before testing the next time the inputs */
-	    g_process_domotix = PROCESS_OFF;
-	    g_evt_process_domotix.timeout = 1000;
-	    event_add(&g_evt_process_domotix, callback_wait_pdomotix);
-	}
+	/* wait some time, before testing the next time the inputs */
+	g_process_domotix = PROCESS_OFF;
+	g_evt_process_domotix.timeout = 1000;
+	event_add(&g_evt_process_domotix, callback_wait_pdomotix);
+
+#ifdef DEBUG_EVT
+	/* Serial.println(DateTime.now()); */
+#endif
     }
 }
 
@@ -2735,6 +2705,10 @@ void event_del(event_t *event)
     if ((event->id >= 0) && (event->id < NB_DELAY_MAX))
     {
 	g_delay[event->id].delay_inuse = 0;
+#ifdef DEBUG_EVT
+	    Serial.print("event_del = ");
+	    Serial.println(event->id);
+#endif
     }
 }
 
@@ -2751,11 +2725,22 @@ void event_add(event_t *event, callback_delay call_after_delay)
 	    g_delay[index].delay_inuse  = 1;
 	    g_delay[index].delay_wait   = event->timeout;
 	    event->id = index;
+
+#ifdef DEBUG_EVT
+	    Serial.print("event_add = ");
+	    Serial.println(index);
+#endif
 	    return;
 	}
     }
+
     /* If there's no more buffer available, then wait and call CB
      */
+#ifdef DEBUG_EVT
+    Serial.println("/!\ warning No more buffer available");
+    Serial.println(index);
+#endif
+
     delay(event->timeout);
     if (call_after_delay != NULL)
     {
@@ -2767,17 +2752,15 @@ void event_add(event_t *event, callback_delay call_after_delay)
 
 void process_delay(void)
 {
-    uint32_t current_millis;
     uint8_t index;
 
     if (g_process_delay != PROCESS_OFF)
     {
-	current_millis = millis();
 	for(index = 0; index < NB_DELAY_MAX; index++)
 	{
 	    if (g_delay[index].delay_inuse)
 	    {
-		if ((current_millis - g_delay[index].delay_start) > g_delay[index].delay_wait)
+		if (millis() - g_delay[index].delay_start >= g_delay[index].delay_wait)
 		{
 		    /* call CB
 		     */
@@ -2786,6 +2769,11 @@ void process_delay(void)
 			g_delay[index].cb();
 		    }
 		    g_delay[index].delay_inuse = 0;
+#ifdef DEBUG_EVT
+	    Serial.print("free = ");
+	    Serial.println(index);
+#endif
+		    return;
 		}
 	    }
 	}
