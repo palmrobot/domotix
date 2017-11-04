@@ -8,35 +8,45 @@
 {
 margin:auto;
 width:1000px;
-height:900px;
+height:1000px;
 background-color:#404652;
 color:white;
 }
-.piece_grande
+.piece_6
 {
 text-align:left;
-width:490px;
+width:330px;
 height:160px;
 }
-.piece_petite
+.piece_4
 {
 text-align:left;
-width:490px;
-height:100px;
+width:330px;
+height:130px;
+}
+.piece_3
+{
+text-align:left;
+width:330px;
+height:110px;
+}
+.piece_2
+{
+text-align:left;
+width:330px;
+height:90px;
 }
 h2
 {
-text-align:center;
+margin-left:120px;
+text-decoration:none;
 color:#7AD1FA;
-margin-top:15px;
-margin-bottom:0px;
 }
 h3
 {
 text-align:center;
 color:grey;
 margin-top:0px;
-margin-bottom:20px;
 }
 h4
 {
@@ -47,10 +57,9 @@ margin-bottom:10px;
 }
 .table_piece
 {
-margin-left:auto;
-margin-right:auto;
+margin-left:20px;
 text-align:left;
-width:350px;
+width:330px;
 border-collapse:collapse;
 }
 .bas
@@ -58,38 +67,37 @@ border-collapse:collapse;
 text-align:center;
 color:#8AADFA;
 border:0px;
-height:100px;
-}
-.inter
-{
-height:30px;
+height:50px;
 }
 .ko
 {
 color:#F0C000;
 text-align:left;
+width:160px;
 }
 .cr
 {
 color:#F04000;
 font-weight:bold;
 text-align:left;
+width:160px;
 }
 .ok
 {
 text-align:left;
-width:200px;
+width:170px;
 }
 .po
 {
 color:#298A08;
 font-weight:bold;
 text-align: left;
+width:160px;
 }
 .vi
 {
 text-align:left;
-width:200px;
+width:160px;
 }
 -->
 </style>
@@ -99,16 +107,14 @@ width:200px;
 <table>
 <tr>
 <td>
-<h2 style="color:white">Système de surveillance
-domotique</br><a href="config.htm" style="text-decoration:none;color:white">DOMOTIX</a></h2>
-<h4>$w00</h4>
-<h3>$z00$y00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a></h3>
+<h2 style="margin-left:0px;text-decoration:none;color:white;text-align:center;">Système de surveillance domotique</br>
+<a href="config.htm" style="margin-left:0px;text-decoration:none;color:white;text-align:center">DOMOTIX</a></h2>
+<h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a><br/><span style="color:#D11E1E;">$w00</span></h3>
 <table class="table_piece">
 <tr>
 <td>
-<div class="piece_grande">
-<a href="garage.htm"
-style="text-decoration:none;"><h2>Garage<span style="font-size:medium"> ($V00°C)</span></h2></a>
+<div class="piece_6">
+<a href="garage.htm"><h2  style="margin-left:60px;text-decoration:none;">Garage<span style="font-size:medium"> ($V00°C)</span></h2></a>
 <table class="table_piece">
 <tr><td>Porte droite :</td><td class="$A08">$A01</td></tr>
 <tr><td>Porte gauche :</td><td class="$B08">$B01</td></tr>
@@ -120,8 +126,8 @@ style="text-decoration:none;"><h2>Garage<span style="font-size:medium"> ($V00°C)
 </div>
 </td>
 <td>
-<div class="piece_grande">
-<a href="lingerie.htm" style="text-decoration:none;"><h2>Lingerie</h2></a>
+<div class="piece_6">
+<a href="lingerie.htm"><h2  style="margin-left:90px;text-decoration:none;">Lingerie</h2></a>
 <table class="table_piece">
 <tr><td>Porte cellier :</td><td class="$F03">$F01</td></tr>
 <tr><td>Porte garage :</td><td class="$H03">$H01</td></tr>
@@ -131,53 +137,9 @@ style="text-decoration:none;"><h2>Garage<span style="font-size:medium"> ($V00°C)
 </table>
 </div>
 </td>
-</tr>
-<tr>
 <td>
-<div class="piece_petite">
-<a href="cellier.htm" style="text-decoration:none;"><h2>Cellier</h2></a>
-<table class="table_piece">
-<tr><td>Porte extérieure :</td><td class="$E08">$E01</td></tr>
-<tr><td>Porte lingerie :</td><td class="$F03">$F01</td></tr>
-<tr><td>Lumière :</td><td class="$G03">$G02</td></tr>
-</table>
-</div>
-</td>
-<td>
-<div class="piece_petite">
-<a href="bureau.htm" style="text-decoration:none;"><h2>Bureau</h2></a>
-<table class="table_piece">
-<tr><td>Fenêtre :</td><td class="$a08">$a01</td></tr>
-<tr><td>Porte :</td><td class="$Q03">$Q01</td></tr>
-<tr><td>Lumière :</td><td class="$X03">$X02</td></tr>
-</table>
-</div>
-</td>
-</tr>
-<tr>
-<td>
-<div class="piece_petite">
-<a href="cuisine.htm" style="text-decoration:none;"><h2>Cuisine</h2></a>
-<table class="table_piece">
-<tr><td>Porte extérieure :</td><td class="$L08">$L01</td></tr>
-<tr><td>Porte lingerie :</td><td class="$K03">$K01</td></tr>
-</table>
-</div>
-</td>
-<td>
-<div class="piece_petite">
-<a href="entree.htm" style="text-decoration:none;"><h2>Entrée</h2></a>
-<table class="table_piece">
-<tr><td>Porte entrée :</td><td class="$O08">$O01</td></tr>
-<tr><td>Porte bureau :</td><td class="$Q03">$Q01</td></tr>
-</table>
-</div>
-</td>
-</tr>
-<tr>
-<td>
-<div class="piece_petite">
-<a href="poule.htm" style="text-decoration:none;"><h2>Poulailler</h2></a>
+<div class="piece_6">
+<a href="poule.htm"><h2  style="margin-left:90px;text-decoration:none;">Poulailler</h2></a>
 <table class="table_piece">
 <tr><td>Porte :</td><td class="$P03">$P01</td></tr>
 <tr><td>Poulailler :</td><td class="$T05">$T06</td></tr>
@@ -186,14 +148,77 @@ style="text-decoration:none;"><h2>Garage<span style="font-size:medium"> ($V00°C)
 </table>
 </div>
 </td>
+</tr>
+<tr>
 <td>
-<div class="piece_petite">
-<a href="meteo.htm" style="text-decoration:none;"><h2>Températures</h2></a>
+<div class="piece_3">
+<a href="cellier.htm"><h2  style="margin-left:60px;text-decoration:none;">Cellier</h2></a>
 <table class="table_piece">
-<tr><td>Min du jour :</td><td>$i00</td></tr>
-<tr><td>Max du jour :</td><td>$j00</td></tr>
-<tr><td>Min de l'année :</td><td>$k00</td></tr>
-<tr><td>Max de l'année :</td><td>$l00</td></tr>
+<tr><td>Porte extérieure :</td><td class="$E08">$E01</td></tr>
+<tr><td>Porte lingerie :</td><td class="$F03">$F01</td></tr>
+<tr><td>Lumière :</td><td class="$G03">$G02</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_3">
+<a href="bureau.htm"><h2  style="margin-left:90px;text-decoration:none;">Bureau</h2></a>
+<table class="table_piece">
+<tr><td>Fenêtre :</td><td class="$a08">$a01</td></tr>
+<tr><td>Porte :</td><td class="$Q03">$Q01</td></tr>
+<tr><td>Lumière :</td><td class="$X03">$X02</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_3">
+</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="piece_2">
+<a href="cuisine.htm"><h2  style="margin-left:60px;text-decoration:none;">Cuisine</h2></a>
+<table class="table_piece">
+<tr><td>Porte extérieure :</td><td class="$L08">$L01</td></tr>
+<tr><td>Porte lingerie :</td><td class="$K03">$K01</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_2">
+<a href="entree.htm"><h2  style="margin-left:90px;text-decoration:none;">Entrée</h2></a>
+<table class="table_piece">
+<tr><td>Porte entrée :</td><td class="$O08">$O01</td></tr>
+<tr><td>Porte bureau :</td><td class="$Q03">$Q01</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_2">
+</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="piece_4">
+<a href="edf.htm"><h2  style="margin-left:60px;text-decoration:none;">Compteurs EDF</h2></a>
+<table class="table_piece">
+<tr><td>Heures creuses :</td><td class="ok">$f00</td></tr>
+<tr><td>Heures pleines :</td><td class="ok">$g00</td></tr>
+<tr><td>HC semaine :</td><td class="ok">$m00</td></tr>
+<tr><td>HP semaine :</td><td class="ok">$n00</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_4">
+<a href="meteo.htm"><h2  style="margin-left:90px;text-decoration:none;">Météo</h2></a>
+<table class="table_piece">
+<tr><td>Min du jour :</td><td class="ok">$i00</td></tr>
+<tr><td>Max du jour :</td><td class="ok">$j00</td></tr>
+<tr><td>Min de l'année :</td><td class="ok">$k00</td></tr>
+<tr><td>Max de l'année :</td><td class="ok">$l00</td></tr>
 </table>
 </div>
 </td>
@@ -201,7 +226,7 @@ style="text-decoration:none;"><h2>Garage<span style="font-size:medium"> ($V00°C)
 </td>
 </tr>
 <tr>
-<td colspan="2" class="bas">
+<td colspan="3" class="bas">
 Domotix $x00: developped by PalmRobot - 2014 - All rights reserved</br>
 Connexion de l'adresse IP : $Z00
 </td>

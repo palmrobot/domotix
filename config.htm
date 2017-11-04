@@ -7,34 +7,31 @@
 .main
 {
 margin:auto;
-padding-left:50px;
 width:1000px;
-height:980px;
+height:1000px;
 background-color:#404652;
-color:white;
-}
-h1
-{
-text-align:center;
 color:white;
 }
 h2
 {
-text-align:center;
+margin-left:120px;
+text-decoration:none;
 color:#7AD1FA;
 }
 h3
 {
 text-align:center;
 color:grey;
+margin-top:0px;
 }
 .table_piece
 {
-width:998px;
+text-align:left;
+width:1000px;
+border-collapse:collapse;
 }
 .liste
 {
-padding-left:200px;
 color:white;
 text-align: center;
 }
@@ -49,14 +46,20 @@ height:30px;
 {
 margin-left:200px;
 }
-.cell
+#radioGroup .wrap
 {
-text-align:left;
-padding-right:100px
+display: inline-block;
 }
-.cell_env
+#radioGroup label
 {
-text-align:left;
+display: block;
+text-align: center;
+margin: 0 0.2em;
+}
+#radioGroup input[type="radio"]
+{
+display: block;
+margin: 0.5em auto;
 }
 -->
 </style>
@@ -66,44 +69,76 @@ text-align:left;
 <table class="table_piece">
 <tr>
 <td>
-<h2 style="color:white">Système de surveillance domotique</br><a href="index.htm" style="text-decoration:none;color:white">DOMOTIX</a></h2>
-<h3>$z00 $M00°C</h3>
-</td>
-</tr>
-</table>
+<h2 style="margin-left:0px;text-decoration:none;color:white;text-align:center;">Système de surveillance
+domotique</br><a href="config.htm" style="margin-left:0px;text-decoration:none;color:white">DOMOTIX</a></h2>
+<h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a><br/><span style="color:#D11E1E;">$w00</span></h3>
 <div class="celldiv">
 <table>
 <tr>
 <form method="get" class="liste" action="config.htm">
-<td class="cell">
+<td>
 <p>
-<label for="Lampe1"> Lampe 1 </label><input type="radio" name="Lampe1" value="lampe1_on" id="lampe1_on" $bN7 />on  <input type="radio" name="Lampe1" value="lampe1_off" id="lampe1_off" $bF7 />off<br />
-<label for="Lampe2"> Lampe 2 </label><input type="radio" name="Lampe2" value="lampe2_on" id="lampe2_on" $cN7 />on  <input type="radio" name="Lampe2" value="lampe2_off" id="lampe2_off" $cF7 />off<br />
-<label for="Lampe3"> Lampe 3 </label><input type="radio" name="Lampe3" value="lampe3_on" id="lampe3_on" $dN7 />on  <input type="radio" name="Lampe3" value="lampe3_off" id="lampe3_off" $dF7 />off<br />
-<label for="Lampe4"> Lampe 4 </label><input type="radio" name="Lampe4" value="lampe4_on" id="lampe4_on" $eN7 />on  <input type="radio" name="Lampe4" value="lampe4_off" id="lampe4_off" $eF7 />off<br />
+<div id="radioGroup">
+<div class="wrap">
+<label for="Lun">Lun</label><input type="radio" name="week" value="lun" id="lun" $WL7 />
+</div>
+<div class="wrap">
+<label for="Mar">Mar</label><input type="radio" name="week" value="mar" id="mar" $WM7 />
+</div>
+<div class="wrap">
+<label for="Mer">Mer</label><input type="radio" name="week" value="mer" id="mer" $WE7 />
+</div>
+<div class="wrap">
+<label for="Jeu">Jeu</label><input type="radio" name="week" value="jeu" id="jeu" $WJ7 />
+</div>
+<div class="wrap">
+<label for="Ven">Ven</label><input type="radio" name="week" value="ven" id="ven" $WV7 />
+</div>
+<div class="wrap">
+<label for="Sam">Sam</label><input type="radio" name="week" value="sam" id="sam" $WS7 />
+</div>
+<div class="wrap">
+<label for="Dim">Dim</label><input type="radio" name="week" value="dim" id="dim" $WD7 />
+</div>
+</div>
 </p>
 </td>
-<td class="cell_env">
+<td>
 <input type="submit" value="Envoyer" />
 </td>
 </form>
 </tr>
 <tr>
 <form method="get" class="liste" action="config.htm">
-<td class="cell">
+<td>
+<p>
+<label for="lun"> Lampe 1 </label><input type="radio" name="Lampe1" value="lampe1_on" id="lampe1_on" $bN7 />on  <input type="radio" name="Lampe1" value="lampe1_off" id="lampe1_off" $bF7 />off<br />
+<label for="mar"> Lampe 2 </label><input type="radio" name="Lampe2" value="lampe2_on" id="lampe2_on" $cN7 />on  <input type="radio" name="Lampe2" value="lampe2_off" id="lampe2_off" $cF7 />off<br />
+<label for="Lampe3"> Lampe 3 </label><input type="radio" name="Lampe3" value="lampe3_on" id="lampe3_on" $dN7 />on  <input type="radio" name="Lampe3" value="lampe3_off" id="lampe3_off" $dF7 />off<br />
+<label for="Lampe4"> Lampe 4 </label><input type="radio" name="Lampe4" value="lampe4_on" id="lampe4_on" $eN7 />on  <input type="radio" name="Lampe4" value="lampe4_off" id="lampe4_off" $eF7 />off<br />
+</p>
+</td>
+<td>
+<input type="submit" value="Envoyer" />
+</td>
+</form>
+</tr>
+<tr>
+<form method="get" class="liste" action="config.htm">
+<td>
 <p>
 <input type="radio" name="timezone" id="time2" value="time2" $hN7 /><label for="time2">été</label><br />
 <input type="radio" name="timezone" id="time1" value="time1" $hF7 /><label for="time1">hiver</label>
 </p>
 </td>
-<td class="cell_env">
+<td>
 <input type="submit" value="Envoyer" />
 </td>
 </form>
 </tr>
 <tr>
 <form method="get" class="liste" action="config.htm">
-<td class="cell">
+<td>
 <p>
 <label for="hc"> Heures creuses</label><br />
 <input type="number" name="hc" id="hc" value="$f00" /><br /><br />
@@ -111,14 +146,14 @@ text-align:left;
 <input type="number" name="hp" id="hp" value="$g00" />
 </p>
 </td>
-<td class="cell_env">
+<td>
 <input type="submit" value="Envoyer" />
 </td>
 </form>
 </tr>
-</table>
+</td>
+</tr>
 </div>
-<table class="table_piece">
 <tr>
 <td colspan="2" class="bas">
 <br/><br/><br/>

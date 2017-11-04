@@ -8,29 +8,45 @@
 {
 margin:auto;
 width:1000px;
-height:900px;
+height:1000px;
 background-color:#404652;
 color:white;
 }
-.piece_petite
+.piece_6
 {
 text-align:left;
-width:490px;
-height:100px;
+width:500px;
+height:160px;
+}
+.piece_4
+{
+text-align:left;
+width:500px;
+height:130px;
+}
+.piece_3
+{
+text-align:left;
+width:500px;
+height:110px;
+}
+.piece_2
+{
+text-align:left;
+width:500px;
+height:90px;
 }
 h2
 {
-text-align:center;
+margin-left:120px;
+text-decoration:none;
 color:#7AD1FA;
-margin-top:15px;
-margin-bottom:0px;
 }
 h3
 {
 text-align:center;
 color:grey;
 margin-top:0px;
-margin-bottom:20px;
 }
 h4
 {
@@ -41,10 +57,9 @@ margin-bottom:10px;
 }
 .table_piece
 {
-margin-left:auto;
-margin-right:auto;
+margin-left:20px;
 text-align:left;
-width:350px;
+width:500px;
 border-collapse:collapse;
 }
 .bas
@@ -52,17 +67,37 @@ border-collapse:collapse;
 text-align:center;
 color:#8AADFA;
 border:0px;
-height:100px;
+height:150px;
+}
+.ko
+{
+color:#F0C000;
+text-align:left;
+width:320px;
+}
+.cr
+{
+color:#F04000;
+font-weight:bold;
+text-align:left;
+width:320px;
 }
 .ok
 {
 text-align:left;
-width:150px;
+width:320px;
 }
-.ok1
+.po
+{
+color:#298A08;
+font-weight:bold;
+text-align: left;
+width:320px;
+}
+.vi
 {
 text-align:left;
-width:200px;
+width:320px;
 }
 -->
 </style>
@@ -70,56 +105,55 @@ width:200px;
 <body>
 <div class="main">
 <table>
-<h2 style="color:white">Système de surveillance
-domotique</br><a href="index.htm" style="text-decoration:none;color:white">DOMOTIX</a></h2>
-<h4>$w00</h4>
-<h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a></h3>
+<tr>
+<td>
+<h2 style="margin-left:0px;text-decoration:none;color:white;text-align:center;">Système de surveillance domotique</br>
+<a href="config.htm" style="margin-left:0px;text-decoration:none;color:white;text-align:center">DOMOTIX</a></h2>
+<h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a><br/><span style="color:#D11E1E;">$w00</span></h3>
 <table class="table_piece">
 <tr>
 <td>
-<div class="piece_petite">
-<a href="temp.htm" style="text-decoration:none;"><h2>Températures</h2></a>
+<div class="piece_4">
+<a href="temp.htm"><h2  style="margin-left:90px;text-decoration:none;">Températures</h2></a>
 <table class="table_piece">
-<tr><td class="ok">Min du jour :</td><td class="ok1">$i00</td></tr>
-<tr><td class="ok">Max du jour :</td><td class="ok1">$j00</td></tr>
-<tr><td class="ok">Min de l'année :</td><td class="ok1">$k00</td></tr>
-<tr><td class="ok">Max de l'année :</td><td class="ok1">$l00</td></tr>
+<tr><td>Min du jour :</td><td class="ok">$i00</td></tr>
+<tr><td>Max du jour :</td><td class="ok">$j00</td></tr>
+<tr><td>Min de l'année :</td><td class="ok">$k00</td></tr>
+<tr><td>Max de l'année :</td><td class="ok">$l00</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_4">
+<a href="pluie.htm"><h2  style="text-decoration:none;">Pluviometrie</h2></a>
+<table class="table_piece">
+<tr><td>Aujourd'hui      :</td><td class="ok">$m00</td></tr>
+<tr><td>Hier :</td><td class="ok">$n00</td></tr>
+<tr><td>Avant hier :</td><td class="ok">$o00</td></tr>
 </table>
 </div>
 </td>
 </tr>
 <tr>
 <td>
-<div class="piece_petite">
-<a href="pluie.htm" style="text-decoration:none;"><h2>Pluviometrie</h2></a>
+<div class="piece_2">
+<a href="vitesse.htm"><h2  style="text-decoration:none;">Vitesse du vent</h2></a>
 <table class="table_piece">
-<tr><td class="ok">Aujourd'hui      :</td><td>$m00</td></tr>
-<tr><td>Hier :</td><td>$n00</td></tr>
-<tr><td>Avant hier :</td><td>$o00</td></tr>
+<tr><td>Vitesse :</td><td class="ok">$p00</td></tr>
+<tr><td>Max du jour :</td><td class="ok">$q00</td></tr>
+<tr><td>Max de l'année :</td><td class="ok">$r00</td></tr>
+</table>
+</div>
+</td>
+<td>
+<div class="piece_2">
+<a href="sens.htm"><h2  style="text-decoration:none;">Orientation du vent</h2></a>
+<table class="table_piece">
+<tr><td>Sens du vent :</td><td class="ok">$s00</td></tr>
 </table>
 </div>
 </td>
 </tr>
-<tr>
-<td>
-<div class="piece_petite">
-<a href="vitesse.htm" style="text-decoration:none;"><h2>Vitesse du vent</h2></a>
-<table class="table_piece">
-<tr><td class="ok">Vitesse :</td><td>$p00</td></tr>
-<tr><td>Max du jour :</td><td>$q00</td></tr>
-<tr><td>Max de l'année :</td><td>$r00</td></tr>
-</table>
-</div>
-</td>
-</tr>
-<tr>
-<td>
-<div class="piece_petite">
-<a href="sens.htm" style="text-decoration:none;"><h2>Orientation du vent</h2></a>
-<table class="table_piece">
-<tr><td class="ok">Sens du vent :</td><td>$s00</td></tr>
-</table>
-</div>
 </td>
 </tr>
 <tr>

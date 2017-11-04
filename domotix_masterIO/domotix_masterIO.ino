@@ -4,66 +4,68 @@
 #include <SPI.h>
 #include <Time.h>
 #include <SD.h>
-#include <Ethernet.h>
+#include <Ethernet2.h>
 #include <EEPROM.h>
 
-/*#define DEBUG
-#define DEBUG_TEMP
-#define DEBUG_EVT*/
-/* #define DEBUG_EDF*/
+/* #define DEBUG */
+/* #define DEBUG_TEMP */
+/* #define DEBUG_EVT */
+/* #define DEBUG_EDF */
 /* #define DEBUG_HTML */
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.22"
+#define VERSION				"v4.30"
 
 /********************************************************/
 /*      Pin  definitions                                */
 /********************************************************/
-#define PIN_TEMP_EXT_OFFSET		A0 /* U */
+
+#define PIN_GARAGE_DROITE		9  /* A */
+#define PIN_GARAGE_GAUCHE		8  /* B */
+#define PIN_GARAGE_FENETRE		7  /* C */
 #define PIN_GARAGE_LUMIERE_ETABLI	A1 /* D */
+#define PIN_CELLIER_PORTE_EXT		6  /* E */
+#define PIN_CELLIER_PORTE_INT		5  /* F */
 #define PIN_CELLIER_LUMIERE		A2 /* G */
-#define PIN_TEMP_EXT			A3 /* M */
+#define PIN_GARAGE_FOND			2  /* H */
 #define PIN_GARAGE_LUMIERE		A4 /* I */
 #define PIN_LINGERIE_LUMIERE		A5 /* J */
-#define PIN_TEMP_GARAGE		        A6 /* V */
-#define PIN_BUREAU_LUMIERE	        A7 /* X */
-#define PIN_EDF         		A8
-
-#define PIN_GARAGE_DROITE		9 /* A */
-#define PIN_GARAGE_GAUCHE		8 /* B */
-#define PIN_GARAGE_FENETRE		7 /* C */
-#define PIN_CELLIER_PORTE_EXT		6 /* E */
-#define PIN_CELLIER_PORTE_INT		5 /* F */
-#define PIN_LINGERIE_CUISINE		3 /* K */
-#define PIN_GARAGE_FOND			2 /* H */
+#define PIN_LINGERIE_CUISINE		3  /* K */
 #define PIN_CUISINE_EXT			12 /* L */
-/* temperature exte */			   /* M & U */
+#define PIN_TEMP_EXT			A3 /* M */
 #define PIN_LINGERIE_FENETRE		11 /* N */
 #define PIN_ENTREE_PORTE_EXT		13 /* O */
 #define PIN_OUT_POULAILLER_ACTION	14 /* blue */
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
+#define PIN_BUREAU_PORTE		21 /* Q */
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
-#define PIN_GSM				20 /* h */
-#define PIN_BUREAU_PORTE		21 /* Q */
-#define PIN_BUREAU_FENETRE		29 /* a */
 #define PIN_POULAILLER_HALL		28 /* T */
-/* EDF HC */				   /* W */
-/* EDF HP */				   /* Y */
+#define PIN_TEMP_EXT_OFFSET		A0 /* U */
+#define PIN_TEMP_GARAGE		        A6 /* V */
+/* week */				   /* W */
+#define PIN_BUREAU_LUMIERE	        A7 /* X */
+					   /* Y */
 /* ADDR IP */				   /* Z */
+#define PIN_BUREAU_FENETRE		29 /* a */
 /* lampe1 */				   /* b */
 /* lampe2 */				   /* c */
 /* lampe3 */				   /* d */
 /* lampe4 */				   /* e */
-/* ?????? */				   /* f */
-/* ?????? */				   /* g */
+/* EDF HC */				   /* f */
+/* EDF HP */				   /* g */
 #define PIN_OUT_BUZZER			44 /* h */
 /* temp day min */			   /* i */
 /* temp day max */			   /* j */
-/* temp year min */			   /* i */
-/* temp year max */			   /* j */
+/* temp year min */			   /* k */
+/* temp year max */			   /* l */
+/* EDF HC week */			   /* m */
+/* EDF HP week */			   /* n */
+
+#define PIN_GSM				20
+#define PIN_EDF         		A8
 
 #define PIN_OUT_EDF			36
 #define PIN_OUT_GSM_INIT		37
@@ -73,7 +75,6 @@
 #define PIN_OUT_LAMPE_4			40
 
 #define PIN_SS_ETH_CONTROLLER 		50
-
 
 /* Reserverd Pins */
 #define CS_PIN_SDCARD			4
@@ -149,7 +150,24 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 /********************************************************/
 /*      EEPROM Addresses                                */
 /********************************************************/
+#define EEPROM_ADDR_EDF_HC			0
+#define EEPROM_ADDR_EDF_HP			4
 #define EEPROM_ADDR_TIMEZONE			8
+#define EEPROM_ADDR_MINYEAR			9
+#define EEPROM_ADDR_MINYEAR_HOU			10
+#define EEPROM_ADDR_MINYEAR_MIN			11
+#define EEPROM_ADDR_MINYEAR_DAY			12
+#define EEPROM_ADDR_MINYEAR_MON			13
+#define EEPROM_ADDR_MAXYEAR			14
+#define EEPROM_ADDR_MAXYEAR_HOU			15
+#define EEPROM_ADDR_MAXYEAR_MIN			16
+#define EEPROM_ADDR_MAXYEAR_DAY			17
+#define EEPROM_ADDR_MAXYEAR_MON			18
+#define EEPROM_ADDR_EDF_WEEK_HC			20
+#define EEPROM_ADDR_EDF_WEEK_HP			24
+#define EEPROM_ADDR_WEEK			28
+/*#define EEPROM_ADDR_NEXT			29 */
+
 
 /********************************************************/
 /*      Process definitions                             */
@@ -247,15 +265,15 @@ uint8_t g_lampe2 = LAMPE_OFF;
 uint8_t g_lampe3 = LAMPE_OFF;
 uint8_t g_lampe4 = LAMPE_OFF;
 
-int8_t g_temperature_ext;
+int8_t g_temperature_ext = 60;
 int8_t g_temperature_daymin = 60;
 int8_t g_temperature_daymax = -60;
 int8_t g_temperature_yearmin = 60;
 int8_t g_temperature_yearmax = -60;
-char  g_tempdaymin_string[15]; /* 27°C à 17h32 */
-char  g_tempdaymax_string[15];
-char  g_tempyearmin_string[25]; /* 27°C à 17h32 le 23/03 */
-char  g_tempyearmax_string[25];
+char  g_tempdaymin_string[20]; /* 27°C à 17h32 */
+char  g_tempdaymax_string[20];
+char  g_tempyearmin_string[30]; /* 27°C à 17h32 le 23/03 */
+char  g_tempyearmax_string[30];
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -268,7 +286,7 @@ uint8_t g_critical_alertes;
 /********************************************************/
 /*      Ethernet global definitions                     */
 /********************************************************/
-uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x00, 0xFF, 0x86};
+uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x11, 0x1C, 0x44};
 uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
 
 EthernetServer g_server(9090);
@@ -426,6 +444,7 @@ uint8_t g_NTP = 0;
 uint8_t g_timezone = 1;
 
 /* date & time */
+uint8_t g_week = 0;
 uint8_t g_hour = 0;
 uint8_t g_min  = 0;
 uint16_t g_hour100 = 0;
@@ -433,6 +452,11 @@ uint8_t g_sec  = 0;
 uint8_t g_day  = 0;
 uint8_t g_mon  = 0;
 uint16_t g_year = 0;
+const char *g_tab_week[8] = {"Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"};
+
+/* EDF */
+uint32_t g_edf_week_hc = 0;
+uint32_t g_edf_week_hp = 0;
 
 /********************************************************/
 /*      FUNCTION		                        */
@@ -455,6 +479,10 @@ void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_dela
 void setup(void)
 {
     uint8_t i;
+    uint8_t hour;
+    uint8_t min;
+    uint8_t day;
+    uint8_t mon;
 
     /* Init Input Ports */
     pinMode(PIN_GARAGE_DROITE, INPUT);
@@ -545,11 +573,11 @@ void setup(void)
     g_init_gsm = 2;
     g_critical_alertes = 0;
 
-    g_timezone = EEPROM.read(EEPROM_ADDR_TIMEZONE);
+    EEPROM.get(EEPROM_ADDR_TIMEZONE, g_timezone);
     if ((g_timezone != 1) && (g_timezone != 2))
     {
 	g_timezone = 2;
-	EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
+	EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
     }
 
     /* init pipes */
@@ -616,16 +644,34 @@ void setup(void)
 
     g_edf_hc.old = 999999;
     g_edf_hc.id = -1;
-    g_edf_hc.value = EEPROM.read(0)<<24 + EEPROM.read(1)<<16 + EEPROM.read(2)<<8 + EEPROM.read(3);
+    EEPROM.get(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
     g_edf_hp.old = 999999;
     g_edf_hp.id = -1;
-    g_edf_hp.value = EEPROM.read(4)<<24 + EEPROM.read(5)<<16 + EEPROM.read(6)<<8 + EEPROM.read(7);
+    EEPROM.get(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 
+    EEPROM.get(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
+    EEPROM.get(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
+
+    g_temperature_ext = 60;
     g_temperature_daymin = 60;
     g_temperature_daymax = -60;
-    g_temperature_yearmin = 60;
-    g_temperature_yearmax = -60;
+
+    EEPROM.get(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_HOU, hour);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, min);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, day);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_MON, mon);
+    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,hour, min, day, mon);
+
+    EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, hour);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, min);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, day);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, mon);
+    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,hour, min, day, mon);
+
+    EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -927,6 +973,14 @@ void deal_with_code(char item, char type, char code)
 	    }
 	}
 	break;
+	case 'f':
+	{
+	    g_client.print(g_edf_hc.value/1000);
+	}break;
+	case 'g':
+	{
+	    g_client.print(g_edf_hp.value/1000);
+	}break;
 	case 'h':
 	{
 	    /* action timezone */
@@ -960,6 +1014,17 @@ void deal_with_code(char item, char type, char code)
 	    g_client.print(g_tempyearmax_string);
 	}
 	break;
+	case 'm':
+	{
+	    g_client.print((g_edf_hc.value - g_edf_week_hc)/1000);
+	}
+	break;
+	case 'n':
+	{
+	    g_client.print((g_edf_hp.value - g_edf_week_hp)/1000);
+	}
+	break;
+
 	case 'w':
 	{
 	    if (g_critical_alertes)
@@ -982,6 +1047,8 @@ void deal_with_code(char item, char type, char code)
 	    {
 		g_client.print(g_clock);
 		g_client.print("  ");
+		g_client.print(g_tab_week[g_week]);
+		g_client.print(" ");
 		g_client.print(g_date);
 	    }
 	    /* debug code ( $y00 ) must be set after time in .html page */
@@ -1119,15 +1186,40 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'W':
 	{
-	    g_client.print(g_edf_hc.value/1000);
-	}break;
+	    /* action lampe 4 */
+	    if ((type == 'L') && (g_week == 1))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'M') && (g_week == 2))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'E') && (g_week == 3))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'J') && (g_week == 4))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'V') && (g_week == 5))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'S') && (g_week == 6))
+	    {
+		g_client.print(F("checked"));
+	    }
+	    else if ((type == 'D') && (g_week == 7))
+	    {
+		g_client.print(F("checked"));
+	    }
+	}
+	break;
 	case 'X':
 	{
 	    /* lumiere bureau */
-	}break;
-	case 'Y':
-	{
-	    g_client.print(g_edf_hp.value/1000);
 	}break;
 	case 'Z':
 	{
@@ -2190,7 +2282,7 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
     fd.close();
 }
 
-void save_entry_temp(const char *file, uint16_t value)
+void save_entry_string(const char *file, char *string)
 {
     File  fd;
     char data[4+1];
@@ -2199,7 +2291,7 @@ void save_entry_temp(const char *file, uint16_t value)
      * Format :
      * 12/12/2014
      * 09:35:42
-     * temp
+     * string
      */
 
     /* Date must be ready to save entry */
@@ -2214,15 +2306,15 @@ void save_entry_temp(const char *file, uint16_t value)
     fd.println(SEPARATE_ITEM);
     fd.println(g_date);
     fd.println(g_clock);
-    sprintf(data,"%d C", value);
-    fd.println(data);
+    fd.println(string);
     fd.close();
 }
 
 void process_domotix(void)
 {
-    uint16_t value;
-    uint16_t value_offset;
+    int16_t value;
+    int16_t value_offset;
+    int16_t temp_ext;
 
     if (g_process_domotix != PROCESS_OFF)
     {
@@ -2308,6 +2400,7 @@ void process_domotix(void)
 		event_del(&g_evt_buzz_before5min_off);
 		event_del(&g_evt_buzz_before5min_on);
 		analogWrite(PIN_OUT_BUZZER, 0);
+		digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 	    }
 	}
@@ -2549,7 +2642,17 @@ void process_domotix(void)
 
 	value     = analogRead(PIN_TEMP_EXT);
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
-	g_temperature_ext = ((500.0 * (value - value_offset)) / 1024) - 2;
+	temp_ext = ((500.0 * (value - value_offset)) / 1024) - 2;
+
+	if (g_temperature_ext == 60)
+	{
+	    g_temperature_ext = (int8_t)temp_ext;
+	}
+	else
+	{
+		if ((temp_ext <= (g_temperature_ext + 1)) && (temp_ext >= (g_temperature_ext - 1)))
+	    	   g_temperature_ext = (int8_t)temp_ext;
+	}
 
 #ifdef DEBUG_TEMP
 	Serial.println(g_clock);
@@ -2574,11 +2677,21 @@ void process_domotix(void)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
 	}
 	else if (g_temperature_ext > g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
 	}
 
 	/* wait some time, before testing the next time the inputs */
@@ -2679,6 +2792,7 @@ void callback_buzz_portecellier_on(void)
 {
     /* Active Buzzer */
     analogWrite(PIN_OUT_BUZZER, 220);
+    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_ON);
     g_evt_buzz_before5min_off.timeout = 1000;
     event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off);
 }
@@ -2687,6 +2801,7 @@ void callback_buzz_portecellier_off(void)
 {
     /* Stop buzzer */
     analogWrite(PIN_OUT_BUZZER, 0);
+    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     g_evt_buzz_before5min_on.timeout = 500;
     event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
 }
@@ -2697,7 +2812,8 @@ void callback_wait_portecellier(void)
     event_del(&g_evt_buzz_before5min_off);
     event_del(&g_evt_buzz_before5min_on);
     send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
-    analogWrite(PIN_OUT_BUZZER, 1);
+    analogWrite(PIN_OUT_BUZZER, 220);
+    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_ON);
 }
 
 void event_del(event_t *event)
@@ -2783,6 +2899,7 @@ void process_delay(void)
 void process_schedule(void)
 {
     uint8_t  half_month;
+    char     data[15];
 
     if (g_process_schedule != PROCESS_OFF)
     {
@@ -2795,7 +2912,8 @@ void process_schedule(void)
 		g_sched_temperature = 1;
 
 		/* write in file  */
-		save_entry_temp("M.txt", g_temperature_ext);
+		sprintf(data,"%d C", g_temperature_ext);
+		save_entry_string("M.txt", data);
 	    }
 	}
 	else
@@ -2826,17 +2944,13 @@ void process_schedule(void)
 		g_sched_edf = 1;
 
 		/* write in file  */
-		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (uint8_t)(g_edf_hc.value>>24));
-		EEPROM.write(1, (uint8_t)(g_edf_hc.value>>16));
-		EEPROM.write(2, (uint8_t)(g_edf_hc.value>>8));
-		EEPROM.write(3, (uint8_t)(g_edf_hc.value&0xFF));
+		sprintf(data,"%l", g_edf_hc.value);
+		save_entry_string("hc.txt", g_edf_hc.value);
+		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
-		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(4, (uint8_t)(g_edf_hp.value>>24));
-		EEPROM.write(5, (uint8_t)(g_edf_hp.value>>16));
-		EEPROM.write(6, (uint8_t)(g_edf_hp.value>>8));
-		EEPROM.write(7, (uint8_t)(g_edf_hp.value&0xFF));
+		sprintf(data,"%l", g_edf_hp.value);
+		save_entry_string("hp.txt", data);
+		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 	    }
 	}
 	else
@@ -2884,12 +2998,26 @@ void process_schedule(void)
 	{
 	    g_sched_door_already_closed = 0;
 	}
+
+	/*************************************/
+	/* Scheduling for write edf values every monday at 20h00 */
+	if ((g_hour100 == 2300) && (g_week == 1))
+	{
+	    sprintf(data,"%l", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
+	    save_entry_string("week_hc.txt", data);
+	    g_edf_week_hc = g_edf_hc.value;
+
+	    sprintf(data,"%l", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
+	    save_entry_string("week_hp.txt", data);
+	    g_edf_week_hp = g_edf_hp.value;
+	}
     }
 }
 
 void process_action(void)
 {
     uint8_t action_done;
+    char data[15];
 
     if (g_process_action != PROCESS_ACTION_NONE)
     {
@@ -2923,17 +3051,13 @@ void process_action(void)
 	    case PROCESS_ACTION_EDF:
 	    {
 		/* write in file  */
-		save_entry_temp("hc.txt", g_edf_hc.value);
-		EEPROM.write(0, (uint8_t)(g_edf_hc.value>>24));
-		EEPROM.write(1, (uint8_t)(g_edf_hc.value>>16));
-		EEPROM.write(2, (uint8_t)(g_edf_hc.value>>8));
-		EEPROM.write(3, (uint8_t)(g_edf_hc.value&0xFF));
+		sprintf(data,"%l", g_edf_hc.value);
+		save_entry_string("hc.txt", data);
+		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
-		save_entry_temp("hp.txt", g_edf_hp.value);
-		EEPROM.write(4, (uint8_t)(g_edf_hp.value>>24));
-		EEPROM.write(5, (uint8_t)(g_edf_hp.value>>16));
-		EEPROM.write(6, (uint8_t)(g_edf_hp.value>>8));
-		EEPROM.write(7, (uint8_t)(g_edf_hp.value&0xFF));
+		sprintf(data,"%l", g_edf_hp.value);
+		save_entry_string("hp.txt", data);
+		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 	    }
 	    break;
 	    case PROCESS_ACTION_TIMEZONE:
@@ -2941,10 +3065,10 @@ void process_action(void)
 		if ((g_timezone != 1) && (g_timezone != 2))
 		{
 		    g_timezone = 2;
-		    EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
+		    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
 		}
 		else
-		    EEPROM.write(EEPROM_ADDR_TIMEZONE, g_timezone);
+		    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
 	    }
 	    break;
 	    default:
@@ -2974,7 +3098,7 @@ void process_do_it(void)
     if (is_gsm_ready != g_init_gsm)
     {
 	g_init_gsm = is_gsm_ready;
-	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+	//digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
     }
 }
 
