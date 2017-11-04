@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.31"
+#define VERSION				"v4.32"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -1022,7 +1022,7 @@ void deal_with_code(File *file, char item, char type, char code)
 	    {
 		g_client.print(g_clock);
 		g_client.print("  ");
-		g_client.print(g_tab_week[g_week]);
+		//g_client.print(g_tab_week[g_week]);
 		g_client.print(" ");
 		g_client.print(g_date);
 	    }
@@ -2963,11 +2963,11 @@ void process_schedule(void)
 		g_sched_edf = 1;
 
 		/* write in file  */
-		sprintf(data,"%l", g_edf_hc.value);
+		sprintf(data,"%ul", g_edf_hc.value);
 		save_entry_string("hc.txt", g_edf_hc.value);
 		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
-		sprintf(data,"%l", g_edf_hp.value);
+		sprintf(data,"%ul", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
 		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 	    }
@@ -3070,11 +3070,11 @@ void process_action(void)
 	    case PROCESS_ACTION_EDF:
 	    {
 		/* write in file  */
-		sprintf(data,"%l", g_edf_hc.value);
+		sprintf(data,"%ul", g_edf_hc.value);
 		save_entry_string("hc.txt", data);
 		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
-		sprintf(data,"%l", g_edf_hp.value);
+		sprintf(data,"%ul", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
 		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 	    }
