@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.30"
+#define VERSION				"v4.31"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -330,6 +330,7 @@ typedef struct
 #define WEB_CODE_POULE		'6'
 #define WEB_CODE_CHECKED	'7'
 #define WEB_CODE_CRITICAL	'8'
+#define WEB_CODE_NOTCHECKED	'9'
 
 
 #define TYPE_PORTE		0
@@ -340,6 +341,8 @@ typedef struct
 #define TYPE_POULE		5
 #define TYPE_CHECKED		6
 #define TYPE_CRITICAL		7
+#define TYPE_NOTCHECKED		8
+
 
 code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
@@ -348,7 +351,8 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"vi", "po"}, /* TYPE_CLASS_POULE */
 		    {"Vide", "Poule"}, /* TYPE_POULE */
 		    {"checked", ""}, /* TYPE_CHECKED */
-		    {"cr", "ok"}}; /* TYPE_CRITIQUE */
+		    {"cr", "ok"}, /* TYPE_CRITIQUE */
+		    {"", "checked"}}; /* TYPE_NOTCHECKED */
 
 /*
  * 12/12/14
@@ -361,7 +365,7 @@ typedef struct
     char item;
     char date[12];
     char hour[12];
-    char state[4];
+    char state[8];
     char clas[4];
 }data_item_t;
 
@@ -869,10 +873,11 @@ void deal_with_file(char item, char type, char code)
     }
 }
 
-void deal_with_code(char item, char type, char code)
+void deal_with_code(File *file, char item, char type, char code)
 {
     code_t *ptr_code;
     char ipaddr[16];
+    char id;
 
     switch (code)
     {
@@ -908,6 +913,10 @@ void deal_with_code(char item, char type, char code)
 	{
 	    ptr_code = &g_code[TYPE_CRITICAL];
 	}break;
+	case WEB_CODE_NOTCHECKED:
+	{
+	    ptr_code = &g_code[TYPE_NOTCHECKED];
+	}break;
 	default:
 	{
 	    ptr_code = &g_code[0];
@@ -923,54 +932,27 @@ void deal_with_code(char item, char type, char code)
 	break;
 	case 'b':
 	{
-	    /* action lampe 1 */
-	    if ((type == 'N') && (g_lampe1 == LAMPE_ON))
-	    {
-		g_client.print(F("checked"));
-	    }
-	    else if ((type == 'F') && (g_lampe1 == LAMPE_OFF))
-	    {
-		g_client.print(F("checked"));
-	    }
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe1],
+		strlen(ptr_code->name[g_lampe1]));
 	}
 	break;
 	case 'c':
 	{
-	    /* action lampe 2 */
-	    if ((type == 'N') && (g_lampe2 == LAMPE_ON))
-	    {
-		g_client.print(F("checked"));
-	    }
-	    else if ((type == 'F') && (g_lampe2 == LAMPE_OFF))
-	    {
-		g_client.print(F("checked"));
-	    }
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe2],
+		strlen(ptr_code->name[g_lampe2]));
 	}
 	break;
 	case 'd':
 	{
-	    /* action lampe 3 */
-	    if ((type == 'N') && (g_lampe3 == LAMPE_ON))
-	    {
-		g_client.print(F("checked"));
-	    }
-	    else if ((type == 'F') && (g_lampe3 == LAMPE_OFF))
-	    {
-		g_client.print(F("checked"));
-	    }
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe3],
+		strlen(ptr_code->name[g_lampe3]));
+
 	}
 	break;
 	case 'e':
 	{
-	    /* action lampe 4 */
-	    if ((type == 'N') && (g_lampe4 == LAMPE_ON))
-	    {
-		g_client.print(F("checked"));
-	    }
-	    else if ((type == 'F') && (g_lampe4 == LAMPE_OFF))
-	    {
-		g_client.print(F("checked"));
-	    }
+	    g_client.write((uint8_t*)ptr_code->name[g_lampe4],
+		strlen(ptr_code->name[g_lampe4]));
 	}
 	break;
 	case 'f':
@@ -983,15 +965,8 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'h':
 	{
-	    /* action timezone */
-	    if ((type == 'N') && (g_timezone == 2))
-	    {
-		g_client.print(F("checked"));
-	    }
-	    else if ((type == 'F') && (g_timezone == 1))
-	    {
-		g_client.print(F("checked"));
-	    }
+	    g_client.write((uint8_t*)ptr_code->name[g_timezone-1],
+		strlen(ptr_code->name[g_timezone-1]));
 	}
 	break;
 	case 'i':
@@ -1186,37 +1161,47 @@ void deal_with_code(char item, char type, char code)
 	}break;
 	case 'W':
 	{
+	    /* then get the id */
+	    id = file->read();
+
 	    /* action lampe 4 */
-	    if ((type == 'L') && (g_week == 1))
+	    if ((id == 'L') && (g_week == 1))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'M') && (g_week == 2))
+	    else if ((id == 'M') && (g_week == 2))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'E') && (g_week == 3))
+	    else if ((id == 'E') && (g_week == 3))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'J') && (g_week == 4))
+	    else if ((id == 'J') && (g_week == 4))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'V') && (g_week == 5))
+	    else if ((id == 'V') && (g_week == 5))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'S') && (g_week == 6))
+	    else if ((id == 'S') && (g_week == 6))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
-	    else if ((type == 'D') && (g_week == 7))
+	    else if ((id == 'D') && ((g_week == 7) || (g_week == 0)))
 	    {
-		g_client.print(F("checked"));
+		g_client.write((uint8_t*)ptr_code->name[0],
+		    strlen(ptr_code->name[0]));
 	    }
+	    break;
 	}
-	break;
 	case 'X':
 	{
 	    /* lumiere bureau */
@@ -1271,9 +1256,9 @@ void send_file_to_client(File *file)
 	    /* then get the code */
 	    code = file->read();
 
-	    if ((type == '0') || (type == 'N') || (type == 'F'))
+	    if (type == '0')
 	    {
-		deal_with_code(item, type, code);
+		deal_with_code(file, item, type, code);
 	    }
 	    else if (type == 'A')
 	    {
@@ -1432,7 +1417,7 @@ time_t getNtpTime(void)
     return 0;
 }
 
-    /* send an NTP request to the time server at the given address */
+/* send an NTP request to the time server at the given address */
 void sendNTPpacket(IPAddress &address)
 {
     /* set all bytes in the buffer to 0 */
@@ -1460,9 +1445,9 @@ void sendNTPpacket(IPAddress &address)
     g_Udp.endPacket();
 }
 
-    /********************************************************/
-    /*      Process                                         */
-    /********************************************************/
+/********************************************************/
+/*      Process                                         */
+/********************************************************/
 
 #ifdef DEBUG
 void process_serial(void)
@@ -1648,7 +1633,7 @@ void process_recv_gsm(void)
 		/* read all bytes in serial queue */
 		while (Serial.available() > 0 )
 		{
-		     value = Serial.read();
+		    value = Serial.read();
 		}
 		/* then send CRC error */
 		crc = 0;
@@ -1700,7 +1685,7 @@ void process_ethernet(void)
 			(g_line[g_req_count] == '\n'))
 		    {
 #ifdef DEBUG_HTML
-		        PgmPrintln("");
+			PgmPrintln("");
 #endif
 			/* Got a complete line */
 			/* Set '\0' to the end of buffer for string treatment */
@@ -1750,10 +1735,44 @@ void process_ethernet(void)
 		    }
 		    else
 		    {
-			/* GET /config.htm?Lampe3=on&Lampe4=on HTTP/1.1 */
+			/* GET /config.htm?week=jeu HTTP/1.1 */
 			/* Check if it's a request for */
-			if (strstr(g_line,"?Lampe") != NULL)
+			if (strstr(g_line,"?week") != NULL)
 			{
+			    /* check for parameters */
+			    if (strstr(g_line,"lun") != NULL)
+			    {
+				g_week = 1;
+			    }
+			    else if (strstr(g_line,"mar") != NULL)
+			    {
+				g_week = 2;
+			    }
+			    else if (strstr(g_line,"mer") != NULL)
+			    {
+				g_week = 3;
+			    }
+			    else if (strstr(g_line,"jeu") != NULL)
+			    {
+				g_week = 4;
+			    }
+			    else if (strstr(g_line,"ven") != NULL)
+			    {
+				g_week = 5;
+			    }
+			    else if (strstr(g_line,"sam") != NULL)
+			    {
+				g_week = 6;
+			    }
+			    else if (strstr(g_line,"dim") != NULL)
+			    {
+				g_week = 7;
+			    }
+			}
+			else if (strstr(g_line,"?Lampe") != NULL)
+			{
+			    /* GET /config.htm?Lampe3=on&Lampe4=on HTTP/1.1 */
+			    /* Check if it's a request for */
 			    /* check for parameters */
 			    paramstr = strstr(g_line,"lampe1_on");
 			    if (paramstr != NULL)
@@ -2650,8 +2669,8 @@ void process_domotix(void)
 	}
 	else
 	{
-		if ((temp_ext <= (g_temperature_ext + 1)) && (temp_ext >= (g_temperature_ext - 1)))
-	    	   g_temperature_ext = (int8_t)temp_ext;
+	    if ((temp_ext <= (g_temperature_ext + 1)) && (temp_ext >= (g_temperature_ext - 1)))
+		g_temperature_ext = (int8_t)temp_ext;
 	}
 
 #ifdef DEBUG_TEMP
@@ -2822,8 +2841,8 @@ void event_del(event_t *event)
     {
 	g_delay[event->id].delay_inuse = 0;
 #ifdef DEBUG_EVT
-	    Serial.print("event_del = ");
-	    Serial.println(event->id);
+	Serial.print("event_del = ");
+	Serial.println(event->id);
 #endif
     }
 }
@@ -2886,8 +2905,8 @@ void process_delay(void)
 		    }
 		    g_delay[index].delay_inuse = 0;
 #ifdef DEBUG_EVT
-	    Serial.print("free = ");
-	    Serial.println(index);
+		    Serial.print("free = ");
+		    Serial.println(index);
 #endif
 		    return;
 		}
