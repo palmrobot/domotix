@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.32"
+#define VERSION				"v4.34"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -259,6 +259,8 @@ uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
 uint8_t g_sched_door_already_closed = 0;
 uint8_t g_sched_edf = 0;
+uint8_t g_sched_week_edf = 0;
+uint8_t g_sched_week = 0;
 
 uint8_t g_lampe1 = LAMPE_OFF;
 uint8_t g_lampe2 = LAMPE_OFF;
@@ -437,7 +439,7 @@ event_t g_evt_process_domotix;
 #define TIME_SYNCHRO_SEC		200
 
 /* server Free */
-IPAddress g_timeServer(132, 163, 4, 101);
+char g_timeServer[] = "ntp.midway.ovh";
 EthernetUDP g_Udp;
 uint32_t g_beginWait;
 time_t prevDisplay = 0;
@@ -456,7 +458,7 @@ uint8_t g_sec  = 0;
 uint8_t g_day  = 0;
 uint8_t g_mon  = 0;
 uint16_t g_year = 0;
-const char *g_tab_week[8] = {"Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"};
+char *g_tab_week[8] = {"Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"};
 
 /* EDF */
 uint32_t g_edf_week_hc = 0;
@@ -487,6 +489,7 @@ void setup(void)
     uint8_t min;
     uint8_t day;
     uint8_t mon;
+    char eeprom_str[20];
 
     /* Init Input Ports */
     pinMode(PIN_GARAGE_DROITE, INPUT);
@@ -681,6 +684,8 @@ void setup(void)
     g_sched_door_already_opened = 0;
     g_sched_door_already_closed = 0;
     g_sched_edf = 0;
+    g_sched_week_edf = 0;
+    g_sched_week = 0;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -699,6 +704,15 @@ void setup(void)
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
     Serial.println(FreeRam());
+
+    PgmPrintln("EEPROM :");
+    for(i=0;i<40;i++)
+    {
+	EEPROM.get(i, hour);
+
+	sprintf(eeprom_str,"%02d:%02d", i, hour);
+	Serial.println(eeprom_str);
+    }
 
     PgmPrintln("Init OK");
 #endif
@@ -1022,7 +1036,7 @@ void deal_with_code(File *file, char item, char type, char code)
 	    {
 		g_client.print(g_clock);
 		g_client.print("  ");
-		//g_client.print(g_tab_week[g_week]);
+		g_client.print(g_tab_week[g_week]);
 		g_client.print(" ");
 		g_client.print(g_date);
 	    }
@@ -1357,6 +1371,8 @@ void digitalClockDisplaySerial(void)
     digitalDate();
     Serial.print(g_clock);
     Serial.print("  ");
+    Serial.print(g_tab_week[g_week]);
+    Serial.print(" ");
     Serial.print(g_date);
     Serial.println();
 }
@@ -1418,7 +1434,7 @@ time_t getNtpTime(void)
 }
 
 /* send an NTP request to the time server at the given address */
-void sendNTPpacket(IPAddress &address)
+void sendNTPpacket(char *address)
 {
     /* set all bytes in the buffer to 0 */
     memset(g_packetBuffer, 0, NTP_PACKET_SIZE);
@@ -3022,13 +3038,41 @@ void process_schedule(void)
 	/* Scheduling for write edf values every monday at 20h00 */
 	if ((g_hour100 == 2300) && (g_week == 1))
 	{
-	    sprintf(data,"%l", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
-	    save_entry_string("week_hc.txt", data);
-	    g_edf_week_hc = g_edf_hc.value;
+	    if (g_sched_week_edf == 0)
+	    {
+		g_sched_week_edf == 1;
 
-	    sprintf(data,"%l", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
-	    save_entry_string("week_hp.txt", data);
-	    g_edf_week_hp = g_edf_hp.value;
+		sprintf(data,"%ul", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
+		save_entry_string("U.txt", data);
+		g_edf_week_hc = g_edf_hc.value;
+
+		sprintf(data,"%ul", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
+		save_entry_string("V.txt", data);
+		g_edf_week_hp = g_edf_hp.value;
+	    }
+	}
+	else
+	{
+	    g_sched_week_edf == 0;
+	}
+
+	/*************************************/
+	/* Scheduling for changing day at midnight */
+	if (g_hour100 == 0)
+	{
+	    if (g_sched_week == 0)
+	    {
+		g_sched_week = 1;
+
+		if (g_week == 7)
+		    g_week = 1;
+		else
+		    g_week++;
+	    }
+	}
+	else
+	{
+	    g_sched_week = 0;
 	}
     }
 }
