@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.34"
+#define VERSION				"v4.36"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -258,9 +258,8 @@ uint8_t g_debug      = 0;
 uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
 uint8_t g_sched_door_already_closed = 0;
-uint8_t g_sched_edf = 0;
-uint8_t g_sched_week_edf = 0;
-uint8_t g_sched_week = 0;
+uint8_t g_sched_midnight = 0;
+uint8_t g_sched_temp_year = 0;
 
 uint8_t g_lampe1 = LAMPE_OFF;
 uint8_t g_lampe2 = LAMPE_OFF;
@@ -544,7 +543,7 @@ void setup(void)
     g_process_domotix_quick  = PROCESS_ON;
     g_process_time     = PROCESS_ON;
     g_process_delay    = PROCESS_ON;
-    g_process_schedule = PROCESS_ON;
+    g_process_schedule = PROCESS_OFF;
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
 
@@ -683,9 +682,8 @@ void setup(void)
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
     g_sched_door_already_closed = 0;
-    g_sched_edf = 0;
-    g_sched_week_edf = 0;
-    g_sched_week = 0;
+    g_sched_midnight = 0;
+    g_sched_temp_year = 0;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -716,6 +714,26 @@ void setup(void)
 
     PgmPrintln("Init OK");
 #endif
+}
+
+void save_eeprom()
+{
+    EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
+    EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
+    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
+    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
+    EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
+    EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
+    EEPROM.put(EEPROM_ADDR_WEEK, g_week);
 }
 
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
@@ -1418,6 +1436,8 @@ time_t getNtpTime(void)
 
 	    /* NTP is ok and running */
 	    g_NTP = 1;
+
+	    g_process_schedule = PROCESS_ON;
 
 	    /* convert four bytes starting at location 40 to a long integer */
 	    secsSince1900 =  (unsigned long)g_packetBuffer[40] << 24;
@@ -2712,21 +2732,11 @@ void process_domotix(void)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
 	}
 	else if (g_temperature_ext > g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
 	}
 
 	/* wait some time, before testing the next time the inputs */
@@ -2959,38 +2969,61 @@ void process_schedule(void)
 	/* reset temperature of the day at midnight */
 	if (g_hour100 == 0)
 	{
-	    g_temperature_daymin = 60;
-	    g_temperature_daymax = -60;
+	    if (g_sched_midnight == 0)
+	    {
+		g_sched_midnight = 1;
+
+		/* reset temperatures counters*/
+		g_temperature_daymin = 60;
+		g_temperature_daymax = -60;
+
+		/* write in file  edf counters */
+		sprintf(data,"%ul", g_edf_hc.value);
+		save_entry_string("hc.txt", g_edf_hc.value);
+		sprintf(data,"%ul", g_edf_hp.value);
+		save_entry_string("hp.txt", data);
+
+		/* write to files edf week counters */
+		if (g_week == 1)
+		{
+		    sprintf(data,"%ul", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
+		    save_entry_string("U.txt", data);
+		    g_edf_week_hc = g_edf_hc.value;
+
+		    sprintf(data,"%ul", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
+		    save_entry_string("V.txt", data);
+		    g_edf_week_hp = g_edf_hp.value;
+		}
+
+		/* change day of the week */
+		if (g_week == 7)
+		    g_week = 1;
+		else
+		    g_week++;
+
+		/* save all in eeprom */
+		save_eeprom();
+	    }
+	}
+	else
+	{
+	    g_sched_midnight = 0;
 	}
 
 	/* reset temperature of the year at first january */
 	if ((g_hour100 == 0) && (g_day == 1) && (g_mon == 1))
 	{
-	    g_temperature_yearmin = 60;
-	    g_temperature_yearmax = -60;
-	}
-
-	/*************************************/
-	/* Scheduling for write into eeprom EDF counter every days AT 01:00 */
-	if (g_hour100 == 100)
-	{
-	    if (g_sched_edf == 0)
+	    if (g_sched_temp_year == 0)
 	    {
-		g_sched_edf = 1;
+		g_sched_temp_year = 1;
 
-		/* write in file  */
-		sprintf(data,"%ul", g_edf_hc.value);
-		save_entry_string("hc.txt", g_edf_hc.value);
-		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
-
-		sprintf(data,"%ul", g_edf_hp.value);
-		save_entry_string("hp.txt", data);
-		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
+		g_temperature_yearmin = 60;
+		g_temperature_yearmax = -60;
 	    }
 	}
 	else
 	{
-	    g_sched_edf = 0;
+	    g_sched_temp_year = 0;
 	}
 
 	/*************************************/
@@ -3032,47 +3065,6 @@ void process_schedule(void)
 	else
 	{
 	    g_sched_door_already_closed = 0;
-	}
-
-	/*************************************/
-	/* Scheduling for write edf values every monday at 20h00 */
-	if ((g_hour100 == 2300) && (g_week == 1))
-	{
-	    if (g_sched_week_edf == 0)
-	    {
-		g_sched_week_edf == 1;
-
-		sprintf(data,"%ul", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
-		save_entry_string("U.txt", data);
-		g_edf_week_hc = g_edf_hc.value;
-
-		sprintf(data,"%ul", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
-		save_entry_string("V.txt", data);
-		g_edf_week_hp = g_edf_hp.value;
-	    }
-	}
-	else
-	{
-	    g_sched_week_edf == 0;
-	}
-
-	/*************************************/
-	/* Scheduling for changing day at midnight */
-	if (g_hour100 == 0)
-	{
-	    if (g_sched_week == 0)
-	    {
-		g_sched_week = 1;
-
-		if (g_week == 7)
-		    g_week = 1;
-		else
-		    g_week++;
-	    }
-	}
-	else
-	{
-	    g_sched_week = 0;
 	}
     }
 }
@@ -3116,11 +3108,9 @@ void process_action(void)
 		/* write in file  */
 		sprintf(data,"%ul", g_edf_hc.value);
 		save_entry_string("hc.txt", data);
-		EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
 
 		sprintf(data,"%ul", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
-		EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
 	    }
 	    break;
 	    case PROCESS_ACTION_TIMEZONE:
@@ -3128,10 +3118,9 @@ void process_action(void)
 		if ((g_timezone != 1) && (g_timezone != 2))
 		{
 		    g_timezone = 2;
-		    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
 		}
-		else
-		    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
+
+		save_eeprom();
 	    }
 	    break;
 	    default:
