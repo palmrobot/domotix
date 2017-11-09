@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.36"
+#define VERSION				"v4.37"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -63,6 +63,12 @@
 /* temp year max */			   /* l */
 /* EDF HC week */			   /* m */
 /* EDF HP week */			   /* n */
+
+/* Start Time */			   /* v */
+/* Critical alertes */			   /* w */
+/* Domotix version */			   /* x */
+/* Debug part */			   /* y */
+/* Date & hour */			   /* z */
 
 #define PIN_GSM				20
 #define PIN_EDF         		A8
@@ -254,6 +260,7 @@ state_lumiere_s g_edf_hp; /* Y */
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
+uint8_t g_start	     = 0;
 
 uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
@@ -397,6 +404,7 @@ time_t g_prevDisplay = 0;
 file_web_t g_filename;
 char  g_clock[9];
 char  g_date[9];
+char  g_start_date[20];
 uint8_t g_init_gsm = 0;
 
 /********************************************************/
@@ -575,6 +583,11 @@ void setup(void)
     /* Init global var */
     g_debug = 0;
     g_NTP   = 0;
+    g_start = 0;
+
+    g_date[0] = 0;
+    g_clock[0] = 0;
+    g_start_date[0] = 0;
 
     g_init_gsm = 2;
     g_critical_alertes = 0;
@@ -1032,6 +1045,14 @@ void deal_with_code(File *file, char item, char type, char code)
 	}
 	break;
 
+	case 'v':
+	{
+	    if (g_NTP)
+	    {
+		g_client.print(g_start_date);
+	    }
+	}
+	break;
 	case 'w':
 	{
 	    if (g_critical_alertes)
@@ -1254,7 +1275,7 @@ void deal_with_full_list(char item, char type, char code)
 {
     sprintf(g_full_list_name, "%c.TXT", item);
 
-    if (item == 'M')
+    if ((item == 'M') || (item == 'U') || (item == 'V'))
 	send_file_full_list(g_full_list_name, 4);
     else
 	send_file_full_list(g_full_list_name, 5);
@@ -3065,6 +3086,12 @@ void process_schedule(void)
 	else
 	{
 	    g_sched_door_already_closed = 0;
+	}
+
+	if (g_start == 0)
+	{
+	    sprintf(g_start_date,"%s %s",g_clock, g_date);
+	    g_start = 1;
 	}
     }
 }
