@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.37"
+#define VERSION				"v4.38"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -676,6 +676,11 @@ void setup(void)
     g_temperature_daymin = 60;
     g_temperature_daymax = -60;
 
+    /* reset values */
+    /* EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin); */
+    /* EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax); */
+
+
     EEPROM.get(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
     EEPROM.get(EEPROM_ADDR_MINYEAR_HOU, hour);
     EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, min);
@@ -734,16 +739,7 @@ void save_eeprom()
     EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
     EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
     EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
-    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
+
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
     EEPROM.put(EEPROM_ADDR_WEEK, g_week);
@@ -2753,11 +2749,21 @@ void process_domotix(void)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
+	    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
 	}
 	else if (g_temperature_ext > g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
+	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
 	}
 
 	/* wait some time, before testing the next time the inputs */
@@ -2999,19 +3005,19 @@ void process_schedule(void)
 		g_temperature_daymax = -60;
 
 		/* write in file  edf counters */
-		sprintf(data,"%ul", g_edf_hc.value);
+		sprintf(data,"%lu", g_edf_hc.value);
 		save_entry_string("hc.txt", g_edf_hc.value);
-		sprintf(data,"%ul", g_edf_hp.value);
+		sprintf(data,"%lu", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
 
 		/* write to files edf week counters */
 		if (g_week == 1)
 		{
-		    sprintf(data,"%ul", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
+		    sprintf(data,"%lu", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
 		    save_entry_string("U.txt", data);
 		    g_edf_week_hc = g_edf_hc.value;
 
-		    sprintf(data,"%ul", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
+		    sprintf(data,"%lu", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
 		    save_entry_string("V.txt", data);
 		    g_edf_week_hp = g_edf_hp.value;
 		}
@@ -3133,10 +3139,10 @@ void process_action(void)
 	    case PROCESS_ACTION_EDF:
 	    {
 		/* write in file  */
-		sprintf(data,"%ul", g_edf_hc.value);
+		sprintf(data,"%lu", g_edf_hc.value);
 		save_entry_string("hc.txt", data);
 
-		sprintf(data,"%ul", g_edf_hp.value);
+		sprintf(data,"%lu", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
 	    }
 	    break;
