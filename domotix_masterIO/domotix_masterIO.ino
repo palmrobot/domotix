@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.38"
+#define VERSION				"v4.39"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -45,11 +45,11 @@
 #define PIN_POULAILLER_HALL		28 /* T */
 #define PIN_TEMP_EXT_OFFSET		A0 /* U */
 #define PIN_TEMP_GARAGE		        A6 /* V */
-/* week */				   /* W */
+/* Week */				   /* W */
 #define PIN_BUREAU_LUMIERE	        A7 /* X */
-					   /* Y */
-/* ADDR IP */				   /* Z */
-#define PIN_BUREAU_FENETRE		29 /* a */
+#define PIN_TEMP_BUREAU			A9 /* Y */
+#define PIN_BUREAU_FENETRE		29 /* Z */
+/* ADDR IP */				   /* a */
 /* lampe1 */				   /* b */
 /* lampe2 */				   /* c */
 /* lampe3 */				   /* d */
@@ -73,8 +73,8 @@
 #define PIN_GSM				20
 #define PIN_EDF         		A8
 
-#define PIN_OUT_EDF			36
-#define PIN_OUT_GSM_INIT		37
+#define PIN_OUT_EDF			37
+#define PIN_OUT_GSM_INIT		36
 #define PIN_OUT_LAMPE_1			39
 #define PIN_OUT_LAMPE_2			38
 #define PIN_OUT_LAMPE_3			41
@@ -242,12 +242,16 @@ state_porte_s g_cuisine_porte_ext; /* L */
 state_porte_s g_lingerie_fenetre; /* N */
 state_porte_s g_entree_porte_ext; /* O */
 state_porte_s g_poulailler_porte; /* P */
+state_porte_s g_bureau_porte; /* Q */
 state_porte_s g_poule_gauche; /* R */
 state_porte_s g_poule_droite; /* S */
 state_porte_s g_poulailler; /* T */
-state_lumiere_s g_temperature_garage; /* V */
-state_lumiere_s g_edf_hc; /* W */
-state_lumiere_s g_edf_hp; /* Y */
+state_lumiere_s g_edf_hc;
+state_lumiere_s g_edf_hp;
+uint16_t	g_temperature_garage; /* V */
+state_lumiere_s g_bureau_lumiere; /* X */
+uint16_t	g_temperature_bureau; /* Y */
+state_porte_s	g_bureau_fenetre; /* Z */
 
 #define THRESHOLD_CMP_OLD		10
 #define THRESHOLD_LIGHT_ON		220
@@ -623,6 +627,12 @@ void setup(void)
     g_garage_porte.old = 2;
     g_garage_porte.id = -1;
 
+    g_bureau_porte.old = 2;
+    g_bureau_porte.id = -1;
+
+    g_bureau_fenetre.old = 2;
+    g_bureau_fenetre.id = -1;
+
     g_cellier_porte_ext.old = 2;
     g_cellier_porte_ext.id = -1;
 
@@ -632,6 +642,10 @@ void setup(void)
     g_cellier_lumiere.old = 2000;
     g_cellier_lumiere.state_old = 2;
     g_cellier_lumiere.id = -1;
+
+    g_bureau_lumiere.old = 2000;
+    g_bureau_lumiere.state_old = 2;
+    g_bureau_lumiere.id = -1;
 
     g_lingerie_lumiere.old = 2000;
     g_lingerie_lumiere.state_old = 2;
@@ -968,7 +982,8 @@ void deal_with_code(File *file, char item, char type, char code)
     {
 	case 'a':
 	{
-	    /* fenetre bureau */
+	    sprintf(ipaddr,"%d.%d.%d.%d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]);
+	    g_client.print(ipaddr);
 	}
 	break;
 	case 'b':
@@ -987,7 +1002,6 @@ void deal_with_code(File *file, char item, char type, char code)
 	{
 	    g_client.write((uint8_t*)ptr_code->name[g_lampe3],
 		strlen(ptr_code->name[g_lampe3]));
-
 	}
 	break;
 	case 'e':
@@ -1188,6 +1202,8 @@ void deal_with_code(File *file, char item, char type, char code)
 	case 'Q':
 	{
 	    /* porte Bureau */
+	    g_client.write((uint8_t*)ptr_code->name[g_bureau_porte.curr],
+		strlen(ptr_code->name[g_bureau_porte.curr]));
 	}break;
 	case 'R':
 	{
@@ -1206,7 +1222,7 @@ void deal_with_code(File *file, char item, char type, char code)
 	}break;
 	case 'V':
 	{
-	    g_client.print(g_temperature_garage.curr);
+	    g_client.print(g_temperature_garage);
 	}break;
 	case 'W':
 	{
@@ -1254,11 +1270,25 @@ void deal_with_code(File *file, char item, char type, char code)
 	case 'X':
 	{
 	    /* lumiere bureau */
+	    if (g_debug)
+	    {
+		g_client.print(g_bureau_lumiere.curr);
+	    }
+	    else
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_bureau_lumiere.state_curr],
+		    strlen(ptr_code->name[g_bureau_lumiere.state_curr]));
+	    }
+	}break;
+	case 'Y':
+	{
+	    g_client.print(g_temperature_bureau);
 	}break;
 	case 'Z':
 	{
-	    sprintf(ipaddr,"%d.%d.%d.%d",g_remoteIP[0],g_remoteIP[1],g_remoteIP[2],g_remoteIP[3]);
-	    g_client.print(ipaddr);
+	    /* fenetre bureau */
+	    g_client.write((uint8_t*)ptr_code->name[g_bureau_fenetre.curr],
+		strlen(ptr_code->name[g_bureau_fenetre.curr]));
 	}break;
 	default:
 
@@ -2379,6 +2409,7 @@ void save_entry_string(const char *file, char *string)
     fd.println(g_date);
     fd.println(g_clock);
     fd.println(string);
+    fd.println("ok");
     fd.close();
 }
 
@@ -2472,7 +2503,6 @@ void process_domotix(void)
 		event_del(&g_evt_buzz_before5min_off);
 		event_del(&g_evt_buzz_before5min_on);
 		analogWrite(PIN_OUT_BUZZER, 0);
-		digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 	    }
 	}
@@ -2502,6 +2532,33 @@ void process_domotix(void)
 
 	    /* write in file  */
 	    save_entry("H.txt", g_garage_porte.curr, TYPE_PORTE);
+	}
+
+	g_bureau_porte.curr =  digitalRead(PIN_BUREAU_PORTE);
+	if (g_bureau_porte.curr != g_bureau_porte.old)
+	{
+	    g_bureau_porte.old = g_bureau_porte.curr;
+
+	    /* write in file  */
+	    save_entry("Q.txt", g_bureau_porte.curr, TYPE_PORTE);
+	}
+
+	g_bureau_fenetre.curr = digitalRead(PIN_BUREAU_FENETRE);
+	if (g_bureau_fenetre.curr != g_bureau_fenetre.old)
+	{
+	    g_bureau_fenetre.old = g_bureau_fenetre.curr;
+
+	    /* write in file  */
+	    save_entry("Z.txt", g_bureau_fenetre.curr, TYPE_PORTE);
+
+	    /* Critical part */
+	    if (g_bureau_fenetre.curr == 0)
+	    {
+		/* Send SMS */
+		send_SMS_alerte("La Fenetre du bureau vient de s'ouvrir");
+	    }
+	    else
+		send_SMS_alerte("La Fenetre du bureau vient de se fermer");
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
@@ -2627,6 +2684,30 @@ void process_domotix(void)
 	    }
 	}
 
+	g_bureau_lumiere.curr =  analogRead(PIN_BUREAU_LUMIERE);
+	if ( (g_bureau_lumiere.curr > (g_bureau_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_bureau_lumiere.curr + THRESHOLD_CMP_OLD) < g_bureau_lumiere.old) )
+	{
+	    g_bureau_lumiere.old = g_bureau_lumiere.curr;
+
+	    if (g_bureau_lumiere.curr > THRESHOLD_LIGHT_ON)
+	    {
+		g_bureau_lumiere.state_curr = 0;
+	    }
+	    else
+	    {
+		g_bureau_lumiere.state_curr = 1;
+	    }
+
+	    if (g_bureau_lumiere.state_curr != g_bureau_lumiere.state_old)
+	    {
+		g_bureau_lumiere.state_old = g_bureau_lumiere.state_curr;
+
+		/* write in file  */
+		save_entry("X.txt", g_bureau_lumiere.state_curr, TYPE_LUMIERE);
+	    }
+	}
+
 	g_cellier_lumiere.curr =  analogRead(PIN_CELLIER_LUMIERE);
 	if ( (g_cellier_lumiere.curr > (g_cellier_lumiere.old + THRESHOLD_CMP_OLD)) ||
 	    ((g_cellier_lumiere.curr + THRESHOLD_CMP_OLD) < g_cellier_lumiere.old) )
@@ -2710,7 +2791,10 @@ void process_domotix(void)
 	 */
 
 	value     = analogRead(PIN_TEMP_GARAGE);
-	g_temperature_garage.curr = (500.0 * value) / 1024;
+	g_temperature_garage = (500.0 * value) / 1024;
+
+	value     = analogRead(PIN_TEMP_BUREAU);
+	g_temperature_bureau = (500.0 * value) / 1024;
 
 	value     = analogRead(PIN_TEMP_EXT);
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
@@ -2729,7 +2813,7 @@ void process_domotix(void)
 #ifdef DEBUG_TEMP
 	Serial.println(g_clock);
 	Serial.print("garage = ");
-	Serial.print(g_temperature_garage.curr);
+	Serial.print(g_temperature_garage);
 	Serial.print(" ext = ");
 	Serial.println(g_temperature_ext);
 #endif
@@ -2797,21 +2881,27 @@ void process_domotix_quick(void)
 	edf->curr = analogRead(PIN_EDF);
 
 #ifdef DEBUG_EDF
-	Serial.println(edf->curr);
+	Serial.print(edf->curr);
 #endif
 
-	if ( (edf->curr > (edf->old + 80)) ||
-	    ((edf->curr + 80) < edf->old) )
+	if ( (edf->curr > (edf->old + 40)) ||
+	    ((edf->curr + 40) < edf->old) )
 	{
 	    edf->old = edf->curr;
 
-	    if (edf->curr > 100)
+	    if (edf->curr > 80)
 	    {
 		edf->state_curr = 1;
+#ifdef DEBUG_EDF
+		Serial.println("  1");
+#endif
 	    }
 	    else
 	    {
 		edf->state_curr = 0;
+#ifdef DEBUG_EDF
+		Serial.println("  0");
+#endif
 	    }
 
 	    if (edf->state_curr != edf->state_old)
@@ -2824,6 +2914,9 @@ void process_domotix_quick(void)
 		{
 		    edf->value++;
 		    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
+#ifdef DEBUG_EDF
+	Serial.println("++++++1");
+#endif
 		}
 
 		edf->state_old = edf->state_curr;
@@ -2864,7 +2957,6 @@ void callback_buzz_portecellier_on(void)
 {
     /* Active Buzzer */
     analogWrite(PIN_OUT_BUZZER, 220);
-    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_ON);
     g_evt_buzz_before5min_off.timeout = 1000;
     event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off);
 }
@@ -2873,7 +2965,6 @@ void callback_buzz_portecellier_off(void)
 {
     /* Stop buzzer */
     analogWrite(PIN_OUT_BUZZER, 0);
-    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
     g_evt_buzz_before5min_on.timeout = 500;
     event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
 }
@@ -2885,7 +2976,6 @@ void callback_wait_portecellier(void)
     event_del(&g_evt_buzz_before5min_on);
     send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
     analogWrite(PIN_OUT_BUZZER, 220);
-    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_ON);
 }
 
 void event_del(event_t *event)
@@ -3006,7 +3096,7 @@ void process_schedule(void)
 
 		/* write in file  edf counters */
 		sprintf(data,"%lu", g_edf_hc.value);
-		save_entry_string("hc.txt", g_edf_hc.value);
+		save_entry_string("hc.txt", data);
 		sprintf(data,"%lu", g_edf_hp.value);
 		save_entry_string("hp.txt", data);
 
@@ -3183,7 +3273,7 @@ void process_do_it(void)
     if (is_gsm_ready != g_init_gsm)
     {
 	g_init_gsm = is_gsm_ready;
-	//digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
     }
 }
 
