@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.39"
+#define VERSION				"v4.41"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -254,7 +254,11 @@ uint16_t	g_temperature_bureau; /* Y */
 state_porte_s	g_bureau_fenetre; /* Z */
 
 #define THRESHOLD_CMP_OLD		10
-#define THRESHOLD_LIGHT_ON		220
+#define THRESHOLD_LIGHT_ON_GARAGE	130
+#define THRESHOLD_LIGHT_ON_ETABLI	500
+#define THRESHOLD_LIGHT_ON_CELLIER	250
+#define THRESHOLD_LIGHT_ON_LINGERIE	300
+#define THRESHOLD_LIGHT_ON_BUREAU	100
 
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
@@ -2384,7 +2388,7 @@ void save_entry(const char *file, uint8_t value, uint8_t type)
     fd.close();
 }
 
-void save_entry_string(const char *file, char *string)
+void save_entry_string(const char *file, char *string1, char *string2)
 {
     File  fd;
     char data[4+1];
@@ -2407,8 +2411,8 @@ void save_entry_string(const char *file, char *string)
 
     fd.println(SEPARATE_ITEM);
     fd.println(g_date);
-    fd.println(g_clock);
-    fd.println(string);
+    fd.println(string1);
+    fd.println(string2);
     fd.println("ok");
     fd.close();
 }
@@ -2666,7 +2670,7 @@ void process_domotix(void)
 	{
 	    g_garage_lumiere_etabli.old = g_garage_lumiere_etabli.curr;
 
-	    if (g_garage_lumiere_etabli.curr > THRESHOLD_LIGHT_ON)
+	    if (g_garage_lumiere_etabli.curr > THRESHOLD_LIGHT_ON_ETABLI)
 	    {
 		g_garage_lumiere_etabli.state_curr = 0;
 	    }
@@ -2690,7 +2694,7 @@ void process_domotix(void)
 	{
 	    g_bureau_lumiere.old = g_bureau_lumiere.curr;
 
-	    if (g_bureau_lumiere.curr > THRESHOLD_LIGHT_ON)
+	    if (g_bureau_lumiere.curr > THRESHOLD_LIGHT_ON_BUREAU)
 	    {
 		g_bureau_lumiere.state_curr = 0;
 	    }
@@ -2714,7 +2718,7 @@ void process_domotix(void)
 	{
 	    g_cellier_lumiere.old = g_cellier_lumiere.curr;
 
-	    if (g_cellier_lumiere.curr > THRESHOLD_LIGHT_ON)
+	    if (g_cellier_lumiere.curr > THRESHOLD_LIGHT_ON_CELLIER)
 	    {
 		g_cellier_lumiere.state_curr = 0;
 	    }
@@ -2738,7 +2742,7 @@ void process_domotix(void)
 	{
 	    g_garage_lumiere.old = g_garage_lumiere.curr;
 
-	    if (g_garage_lumiere.curr > (THRESHOLD_LIGHT_ON-50))
+	    if (g_garage_lumiere.curr > (THRESHOLD_LIGHT_ON_GARAGE))
 	    {
 		g_garage_lumiere.state_curr = 0;
 	    }
@@ -2762,7 +2766,7 @@ void process_domotix(void)
 	{
 	    g_lingerie_lumiere.old = g_lingerie_lumiere.curr;
 
-	    if (g_lingerie_lumiere.curr > THRESHOLD_LIGHT_ON)
+	    if (g_lingerie_lumiere.curr > THRESHOLD_LIGHT_ON_LINGERIE)
 	    {
 		g_lingerie_lumiere.state_curr = 0;
 	    }
@@ -3061,7 +3065,8 @@ void process_delay(void)
 void process_schedule(void)
 {
     uint8_t  half_month;
-    char     data[15];
+    char     data1[15];
+    char     data2[15];
 
     if (g_process_schedule != PROCESS_OFF)
     {
@@ -3074,8 +3079,8 @@ void process_schedule(void)
 		g_sched_temperature = 1;
 
 		/* write in file  */
-		sprintf(data,"%d C", g_temperature_ext);
-		save_entry_string("M.txt", data);
+		sprintf(data2,"%d C", g_temperature_ext);
+		save_entry_string("M.txt", g_clock, data2);
 	    }
 	}
 	else
@@ -3095,20 +3100,22 @@ void process_schedule(void)
 		g_temperature_daymax = -60;
 
 		/* write in file  edf counters */
-		sprintf(data,"%lu", g_edf_hc.value);
-		save_entry_string("hc.txt", data);
-		sprintf(data,"%lu", g_edf_hp.value);
-		save_entry_string("hp.txt", data);
+		sprintf(data1,"%lu", g_edf_hc.value);
+		save_entry_string("hc.txt", g_clock, data1);
+		sprintf(data1,"%lu", g_edf_hp.value);
+		save_entry_string("hp.txt", g_clock, data1);
 
 		/* write to files edf week counters */
 		if (g_week == 1)
 		{
-		    sprintf(data,"%lu", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
-		    save_entry_string("U.txt", data);
+		    sprintf(data1,"%lu", (uint32_t)(g_edf_hc.value/1000));
+		    sprintf(data2,"%lu", (uint32_t)((g_edf_hc.value - g_edf_week_hc)/1000));
+		    save_entry_string("U.txt", data1, data2);
 		    g_edf_week_hc = g_edf_hc.value;
 
-		    sprintf(data,"%lu", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
-		    save_entry_string("V.txt", data);
+		    sprintf(data1,"%lu", (uint32_t)(g_edf_hp.value/1000));
+		    sprintf(data2,"%lu", (uint32_t)((g_edf_hp.value - g_edf_week_hp)/1000));
+		    save_entry_string("V.txt", data1, data2);
 		    g_edf_week_hp = g_edf_hp.value;
 		}
 
@@ -3230,10 +3237,10 @@ void process_action(void)
 	    {
 		/* write in file  */
 		sprintf(data,"%lu", g_edf_hc.value);
-		save_entry_string("hc.txt", data);
+		save_entry_string("hc.txt", g_clock, data);
 
 		sprintf(data,"%lu", g_edf_hp.value);
-		save_entry_string("hp.txt", data);
+		save_entry_string("hp.txt", g_clock, data);
 	    }
 	    break;
 	    case PROCESS_ACTION_TIMEZONE:
