@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.41"
+#define VERSION				"v4.42"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -275,6 +275,7 @@ uint8_t g_sched_door_already_opened = 0;
 uint8_t g_sched_door_already_closed = 0;
 uint8_t g_sched_midnight = 0;
 uint8_t g_sched_temp_year = 0;
+uint8_t g_sched_daymin_sms = 0;
 
 uint8_t g_lampe1 = LAMPE_OFF;
 uint8_t g_lampe2 = LAMPE_OFF;
@@ -504,7 +505,9 @@ void setup(void)
     uint8_t min;
     uint8_t day;
     uint8_t mon;
+#ifdef DEBUG
     char eeprom_str[20];
+#endif
 
     /* Init Input Ports */
     pinMode(PIN_GARAGE_DROITE, INPUT);
@@ -720,6 +723,7 @@ void setup(void)
     g_sched_door_already_closed = 0;
     g_sched_midnight = 0;
     g_sched_temp_year = 0;
+    g_sched_daymin_sms = 0;
 
     for(i = 0; i < NB_ITEM; i++ )
     {
@@ -1305,7 +1309,7 @@ void deal_with_full_list(char item, char type, char code)
 {
     sprintf(g_full_list_name, "%c.TXT", item);
 
-    if ((item == 'M') || (item == 'U') || (item == 'V'))
+    if (item == 'M')
 	send_file_full_list(g_full_list_name, 4);
     else
 	send_file_full_list(g_full_list_name, 5);
@@ -3088,6 +3092,20 @@ void process_schedule(void)
 	    g_sched_temperature = 0;
 	}
 
+	/* Check negative temperature and send SMS to inform cars class */
+	if (g_hour100 == 700)
+	{
+	    if (g_sched_daymin_sms == 0)
+	    {
+		g_sched_daymin_sms = 1;
+		if (g_temperature_daymin <= 0)
+		{
+		    snprintf(g_send_to_gsm, CMD_DATA_MAX, "Il va falloir gratter la voiture, T°C min = %s", g_tempdaymin_string);
+		    send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, strlen(g_send_to_gsm));
+		}
+	    }
+	}
+
 	/* reset temperature of the day at midnight */
 	if (g_hour100 == 0)
 	{
@@ -3098,6 +3116,7 @@ void process_schedule(void)
 		/* reset temperatures counters*/
 		g_temperature_daymin = 60;
 		g_temperature_daymax = -60;
+		g_sched_daymin_sms = 0;
 
 		/* write in file  edf counters */
 		sprintf(data1,"%lu", g_edf_hc.value);
@@ -3249,6 +3268,8 @@ void process_action(void)
 		{
 		    g_timezone = 2;
 		}
+		snprintf(g_send_to_gsm, CMD_DATA_MAX, "Il va falloir gratter la voiture, T°C min = %s", g_tempdaymin_string);
+		send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, strlen(g_send_to_gsm));
 
 		save_eeprom();
 	    }
