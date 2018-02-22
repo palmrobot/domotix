@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.42"
+#define VERSION				"v4.44"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -39,10 +39,10 @@
 #define PIN_ENTREE_PORTE_EXT		13 /* O */
 #define PIN_OUT_POULAILLER_ACTION	14 /* blue */
 #define PIN_POULAILLER_PORTE		15 /* P yellow */
-#define PIN_BUREAU_PORTE		21 /* Q */
+#define PIN_BUREAU_PORTE		28 /* Q */
 #define PIN_POULE_GAUCHE		16 /* R grey */
 #define PIN_POULE_DROITE		17 /* S brown */
-#define PIN_POULAILLER_HALL		28 /* T */
+#define PIN_POULAILLER_HALL		27 /* T */
 #define PIN_TEMP_EXT_OFFSET		A0 /* U */
 #define PIN_TEMP_GARAGE		        A6 /* V */
 /* Week */				   /* W */
@@ -258,7 +258,7 @@ state_porte_s	g_bureau_fenetre; /* Z */
 #define THRESHOLD_LIGHT_ON_ETABLI	500
 #define THRESHOLD_LIGHT_ON_CELLIER	250
 #define THRESHOLD_LIGHT_ON_LINGERIE	300
-#define THRESHOLD_LIGHT_ON_BUREAU	100
+#define THRESHOLD_LIGHT_ON_BUREAU	300
 
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
@@ -2826,18 +2826,18 @@ void process_domotix(void)
 	Serial.println(g_temperature_ext);
 #endif
 
-	if (g_temperature_ext < g_temperature_daymin)
+	if (g_temperature_ext <= g_temperature_daymin)
 	{
 	    g_temperature_daymin = g_temperature_ext;
 	    sprintf(g_tempdaymin_string,"%d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
 	}
-	else if (g_temperature_ext > g_temperature_daymax)
+	else if (g_temperature_ext >= g_temperature_daymax)
 	{
 	    g_temperature_daymax = g_temperature_ext;
 	    sprintf(g_tempdaymax_string,"%d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
 	}
 
-	if (g_temperature_ext < g_temperature_yearmin)
+	if (g_temperature_ext <= g_temperature_yearmin)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
@@ -2847,7 +2847,7 @@ void process_domotix(void)
 	    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
 	    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
 	}
-	else if (g_temperature_ext > g_temperature_yearmax)
+	else if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
@@ -3100,7 +3100,7 @@ void process_schedule(void)
 		g_sched_daymin_sms = 1;
 		if (g_temperature_daymin <= 0)
 		{
-		    snprintf(g_send_to_gsm, CMD_DATA_MAX, "Il va falloir gratter la voiture, T°C min = %s", g_tempdaymin_string);
+		    snprintf(g_send_to_gsm, CMD_DATA_MAX, "Givre probable sur les voitures, T°C min = %s", g_tempdaymin_string);
 		    send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, strlen(g_send_to_gsm));
 		}
 	    }
@@ -3268,7 +3268,7 @@ void process_action(void)
 		{
 		    g_timezone = 2;
 		}
-		snprintf(g_send_to_gsm, CMD_DATA_MAX, "Il va falloir gratter la voiture, T°C min = %s", g_tempdaymin_string);
+		snprintf(g_send_to_gsm, CMD_DATA_MAX, "Givre probable sur les voitures, T°C min = %s", g_tempdaymin_string);
 		send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, strlen(g_send_to_gsm));
 
 		save_eeprom();

@@ -434,18 +434,21 @@ void process_recv_gsm_sms(void)
 	    /* Get remote number */
 	    g_gsm_sms.remoteNumber(g_sender_number, PHONE_NUMBER_LEN);
 
-	    /* Read message bytes and print them */
-	    i = 0;
-	    do
-	    {
-		g_sms_recv_buffer[i] = g_gsm_sms.read();
-		i++;
-	    }
-	    while (g_sms_recv_buffer[i-1] != 0);
-
 	    /* Check sender */
 	    if ((strstr(g_sender_number, NICO_NUMBER) != NULL) || (strstr(g_sender_number, ESTELLE_NUMBER) != NULL))
 	    {
+		/* Read message bytes and print them */
+		i = 0;
+		do
+		{
+		    g_sms_recv_buffer[i] = g_gsm_sms.read();
+		    i++;
+		}
+		while ((g_sms_recv_buffer[i-1] != 0) && (i < CMD_DATA_MAX));
+
+		if (i == CMD_DATA_MAX)
+		    g_sms_recv_buffer[i-1] = 0;
+
 		if (strcmp(g_sms_recv_buffer, "Bonjour Domotix") == 0)
 		{
 		    if (strstr(g_sender_number, NICO_NUMBER) != NULL)
