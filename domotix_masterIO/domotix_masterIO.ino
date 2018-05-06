@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v4.44"
+#define VERSION				"v4.50"
 
 /********************************************************/
 /*      Pin  definitions                                */
@@ -63,6 +63,11 @@
 /* temp year max */			   /* l */
 /* EDF HC week */			   /* m */
 /* EDF HP week */			   /* n */
+#define PIN_TEMP_GRENIER		A10/* o */
+#define PIN_GRENIER_LUMIERE	        A11/* p */
+#define PIN_METEO_GIROUETTE	        A12/* q */
+#define PIN_METEO_ANEMOMETRE	        21 /* r */
+#define PIN_METEO_PLUVIOMETRE	        20 /* s */
 
 /* Start Time */			   /* v */
 /* Critical alertes */			   /* w */
@@ -70,7 +75,7 @@
 /* Debug part */			   /* y */
 /* Date & hour */			   /* z */
 
-#define PIN_GSM				20
+#define PIN_GSM				26
 #define PIN_EDF         		A8
 
 #define PIN_OUT_EDF			37
@@ -252,6 +257,8 @@ uint16_t	g_temperature_garage; /* V */
 state_lumiere_s g_bureau_lumiere; /* X */
 uint16_t	g_temperature_bureau; /* Y */
 state_porte_s	g_bureau_fenetre; /* Z */
+uint16_t	g_temperature_grenier; /* o */
+state_lumiere_s g_grenier_lumiere; /* p */
 
 #define THRESHOLD_CMP_OLD		10
 #define THRESHOLD_LIGHT_ON_GARAGE	130
@@ -259,6 +266,10 @@ state_porte_s	g_bureau_fenetre; /* Z */
 #define THRESHOLD_LIGHT_ON_CELLIER	250
 #define THRESHOLD_LIGHT_ON_LINGERIE	300
 #define THRESHOLD_LIGHT_ON_BUREAU	300
+#define THRESHOLD_LIGHT_ON_GRENIER	400
+#define OFFSET_TEMP_BUREAU		2
+#define OFFSET_TEMP_EXT			2
+#define OFFSET_TEMP_GRENIER		0
 
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
@@ -505,6 +516,9 @@ void setup(void)
     uint8_t min;
     uint8_t day;
     uint8_t mon;
+    int16_t value;
+    int16_t value_offset;
+    int16_t temp;
 #ifdef DEBUG
     char eeprom_str[20];
 #endif
@@ -682,6 +696,14 @@ void setup(void)
     g_poule_droite.old = 2;
     g_poule_droite.id = -1;
 
+    g_temperature_garage = 0;
+    g_temperature_bureau = 0;
+    g_temperature_grenier = 0;
+
+    g_grenier_lumiere.old = 2000;
+    g_grenier_lumiere.state_old = 2;
+    g_grenier_lumiere.id = -1;
+
     g_edf_hc.old = 999999;
     g_edf_hc.id = -1;
     EEPROM.get(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
@@ -693,7 +715,20 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
     EEPROM.get(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
 
-    g_temperature_ext = 60;
+    /* Init analog parts */
+    value = analogRead(PIN_TEMP_EXT);
+    value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
+    g_temperature_ext = ((500.0 * (value - value_offset)) / 1024) - OFFSET_TEMP_EXT;
+
+    value = analogRead(PIN_TEMP_GARAGE);
+    g_temperature_garage = (500.0 * value) / 1024;
+
+    value = analogRead(PIN_TEMP_BUREAU);
+    g_temperature_bureau  = ((500.0 * value) / 1024) + OFFSET_TEMP_BUREAU;
+
+    value = analogRead(PIN_TEMP_GRENIER);
+    g_temperature_grenier  = ((500.0 * value) / 1024) + OFFSET_TEMP_GRENIER;
+
     g_temperature_daymin = 60;
     g_temperature_daymax = -60;
 
@@ -1062,6 +1097,24 @@ void deal_with_code(File *file, char item, char type, char code)
 	    g_client.print((g_edf_hp.value - g_edf_week_hp)/1000);
 	}
 	break;
+	case 'o':
+	{
+	    g_client.print(g_temperature_grenier);
+	}break;
+	case 'p':
+	{
+	    /* lumiere bureau */
+	    if (g_debug)
+	    {
+		g_client.print(g_grenier_lumiere.curr);
+	    }
+	    else
+	    {
+		g_client.write((uint8_t*)ptr_code->name[g_grenier_lumiere.state_curr],
+		    strlen(ptr_code->name[g_grenier_lumiere.state_curr]));
+	    }
+	}break;
+
 
 	case 'v':
 	{
@@ -2425,7 +2478,7 @@ void process_domotix(void)
 {
     int16_t value;
     int16_t value_offset;
-    int16_t temp_ext;
+    int16_t temp;
 
     if (g_process_domotix != PROCESS_OFF)
     {
@@ -2788,6 +2841,30 @@ void process_domotix(void)
 	    }
 	}
 
+	g_grenier_lumiere.curr =  analogRead(PIN_GRENIER_LUMIERE);
+	if ( (g_grenier_lumiere.curr > (g_grenier_lumiere.old + THRESHOLD_CMP_OLD)) ||
+	    ((g_grenier_lumiere.curr + THRESHOLD_CMP_OLD) < g_grenier_lumiere.old) )
+	{
+	    g_grenier_lumiere.old = g_grenier_lumiere.curr;
+
+	    if (g_grenier_lumiere.curr > THRESHOLD_LIGHT_ON_GRENIER)
+	    {
+		g_grenier_lumiere.state_curr = 0;
+	    }
+	    else
+	    {
+		g_grenier_lumiere.state_curr = 1;
+	    }
+
+	    if (g_grenier_lumiere.state_curr != g_grenier_lumiere.state_old)
+	    {
+		g_grenier_lumiere.state_old = g_grenier_lumiere.state_curr;
+
+		/* write in file  */
+		save_entry("oo.txt", g_grenier_lumiere.state_curr, TYPE_LUMIERE);
+	    }
+	}
+
 	/* ================================
 	 *
 	 *
@@ -2798,30 +2875,34 @@ void process_domotix(void)
 	 * =================================
 	 */
 
-	value     = analogRead(PIN_TEMP_GARAGE);
-	g_temperature_garage = (500.0 * value) / 1024;
+	value = analogRead(PIN_TEMP_GARAGE);
+	temp  = (500.0 * value) / 1024;
+	if ((temp <= (g_temperature_garage + 1)) && (temp >= (g_temperature_garage - 1)))
+		g_temperature_garage = (int8_t)temp;
 
-	value     = analogRead(PIN_TEMP_BUREAU);
-	g_temperature_bureau = (500.0 * value) / 1024;
+	value = analogRead(PIN_TEMP_BUREAU);
+	temp  = ((500.0 * value) / 1024) + OFFSET_TEMP_BUREAU;
+	if ((temp <= (g_temperature_bureau + 1)) && (temp >= (g_temperature_bureau - 1)))
+		g_temperature_bureau = (int8_t)temp;
 
-	value     = analogRead(PIN_TEMP_EXT);
+	value = analogRead(PIN_TEMP_GRENIER);
+	temp  = ((500.0 * value) / 1024) + OFFSET_TEMP_GRENIER;
+	if ((temp <= (g_temperature_grenier + 1)) && (temp >= (g_temperature_grenier - 1)))
+		g_temperature_grenier = (int8_t)temp;
+
+	value = analogRead(PIN_TEMP_EXT);
 	value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
-	temp_ext = ((500.0 * (value - value_offset)) / 1024) - 2;
+	temp  = ((500.0 * (value - value_offset)) / 1024) - OFFSET_TEMP_EXT;
+	if ((temp <= (g_temperature_ext + 1)) && (temp >= (g_temperature_ext - 1)))
+	    g_temperature_ext = (int8_t)temp;
 
-	if (g_temperature_ext == 60)
-	{
-	    g_temperature_ext = (int8_t)temp_ext;
-	}
-	else
-	{
-	    if ((temp_ext <= (g_temperature_ext + 1)) && (temp_ext >= (g_temperature_ext - 1)))
-		g_temperature_ext = (int8_t)temp_ext;
-	}
 
 #ifdef DEBUG_TEMP
 	Serial.println(g_clock);
 	Serial.print("garage = ");
 	Serial.print(g_temperature_garage);
+	Serial.print("grenier = ");
+	Serial.print(g_temperature_grenier);
 	Serial.print(" ext = ");
 	Serial.println(g_temperature_ext);
 #endif
