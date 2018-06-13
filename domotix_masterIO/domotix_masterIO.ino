@@ -16,10 +16,10 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v5.00"
+#define VERSION				"v5.10"
 
 /********************************************************/
-/*      Pin  definitions                                */
+/*      Pin  definitions                               */
 /********************************************************/
 
 #define PIN_GARAGE_DROITE		9  /* A */
@@ -181,17 +181,15 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 #define EEPROM_ADDR_EDF_WEEK_HP			24
 #define EEPROM_ADDR_WEEK			28
 #define EEPROM_ADDR_PLUVIO_MAXYEAR		29
-#define EEPROM_ADDR_PLUVIO_MAXYEAR_HOU		31
-#define EEPROM_ADDR_PLUVIO_MAXYEAR_MIN		33
-#define EEPROM_ADDR_PLUVIO_MAXYEAR_DAY		35
-#define EEPROM_ADDR_PLUVIO_MAXYEAR_MON		37
-#define EEPROM_ADDR_ANEMO_MAXYEAR		39
-#define EEPROM_ADDR_ANEMO_MAXYEAR_HOU		43
-#define EEPROM_ADDR_ANEMO_MAXYEAR_MIN		45
-#define EEPROM_ADDR_ANEMO_MAXYEAR_DAY		47
-#define EEPROM_ADDR_ANEMO_MAXYEAR_MON		49
+#define EEPROM_ADDR_PLUVIO_MAXYEAR_DAY		31
+#define EEPROM_ADDR_PLUVIO_MAXYEAR_MON		32
+#define EEPROM_ADDR_ANEMO_MAXYEAR		33
+#define EEPROM_ADDR_ANEMO_MAXYEAR_HOU		35
+#define EEPROM_ADDR_ANEMO_MAXYEAR_MIN		36
+#define EEPROM_ADDR_ANEMO_MAXYEAR_DAY		37
+#define EEPROM_ADDR_ANEMO_MAXYEAR_MON		38
 
-/*#define EEPROM_ADDR_NEXT			51 */
+/*#define EEPROM_ADDR_NEXT			39 */
 
 
 /********************************************************/
@@ -222,6 +220,9 @@ volatile uint8_t g_process_action;
 uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_DO_NOTHING		PROCESS_OFF
 #define PROCESS_RECV_GSM_WAIT_COMMAND		PROCESS_ON
+
+#define PROCESS_DOMOTIX_TIMEOUT			2000
+#define PROCESS_DOMOTIX_CALC_CPT		500 /* 500 * PROCESS_DOMOTIX_TIMEOUT sec = 1000 sec */
 
 
 /********************************************************/
@@ -313,18 +314,19 @@ int8_t g_temperature_daymin = 60;
 int8_t g_temperature_daymax = -60;
 int8_t g_temperature_yearmin = 60;
 int8_t g_temperature_yearmax = -60;
+int8_t g_ext_acces_open = 0;
 char  g_tempdaymin_string[20]; /* 27°C à 17h32 */
 char  g_tempdaymax_string[20];
 char  g_tempyearmin_string[30]; /* 27°C à 17h32 le 23/03 */
 char  g_tempyearmax_string[30];
-uint16_t  g_temperature_grenier_cpt = 0;
-uint16_t  g_temperature_grenier_total = 0;
-uint16_t  g_temperature_ext_cpt = 0;
-uint16_t  g_temperature_ext_total = 0;
-uint16_t  g_temperature_bureau_cpt = 0;
-uint16_t  g_temperature_bureau_total = 0;
-uint16_t  g_temperature_garage_cpt = 0;
-uint16_t  g_temperature_garage_total = 0;
+int16_t  g_temperature_grenier_cpt = 0;
+int16_t  g_temperature_grenier_total = 0;
+int16_t  g_temperature_ext_cpt = 0;
+int16_t  g_temperature_ext_total = 0;
+int16_t  g_temperature_bureau_cpt = 0;
+int16_t  g_temperature_bureau_total = 0;
+int16_t  g_temperature_garage_cpt = 0;
+int16_t  g_temperature_garage_total = 0;
 char  g_pluvio_string[10]; /* 123mm */
 char  g_pluvio_night_string[10]; /* 123mm */
 char  g_pluvio_max_string[20]; /* 123mm le 23/03 */
@@ -589,8 +591,8 @@ void setup(void)
 #endif
 
     /* Init Input Ports */
-    pinMode(PIN_METEO_PLUVIOMETRE, INPUT_PULLUP);
-    pinMode(PIN_METEO_ANEMOMETRE, INPUT_PULLUP);
+    pinMode(PIN_METEO_PLUVIOMETRE, INPUT);
+    pinMode(PIN_METEO_ANEMOMETRE, INPUT);
     pinMode(PIN_METEO_GIROUETTE, INPUT);
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
@@ -688,6 +690,8 @@ void setup(void)
 
     g_beginWait10sec = millis();
     g_girouette = 0;
+    g_girouette_cpt = 0;
+    g_girouette_total = 0;
 
     g_date[0] = 0;
     g_clock[0] = 0;
@@ -811,6 +815,8 @@ void setup(void)
     g_temperature_daymin = 60;
     g_temperature_daymax = -60;
 
+    g_ext_acces_open = 0;
+
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin); */
     /* EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax); */
@@ -832,17 +838,35 @@ void setup(void)
 
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
+    /* reset values */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
+
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, day);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, mon);
-    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", g_pluvio_max_cpt, day, mon);
+    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", g_pluvio_max_cpt * PLUVIO_UNIT, day, mon);
+
+    /* reset values */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, hour);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, min);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, day);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, mon);
-    sprintf(g_anemo_max_year_string,"%d°C à %02dh%02d le %02d/%02d", g_anemo_max_year_cpt, hour, min, day, mon);
+    sprintf(g_anemo_max_year_string,"%d km/h à %02dh%02d le %02d/%02d", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC)/10, hour, min, day, mon);
+
+    sprintf(g_girouette_string,"------");
+    sprintf(g_pluvio_string,"0 mm");
+    sprintf(g_pluvio_night_string,"0 mm");
+    sprintf(g_anemo_string,"0 km/h");
+    sprintf(g_anemo_max_day_string,"0 km/h");
 
     g_sched_temperature = 0;
     g_sched_door_already_opened = 0;
@@ -2635,9 +2659,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte de droite du garage vient de s'ouvrir");
+		g_ext_acces_open++;
 	    }
 	    else
+	    {
 		send_SMS_alerte("La porte de droite du garage vient de se fermer");
+		g_ext_acces_open--;
+	    }
 	}
 
 	g_garage_gauche.curr =  digitalRead(PIN_GARAGE_GAUCHE);
@@ -2653,9 +2681,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte de gauche du garage vient de s'ouvrir");
+		g_ext_acces_open++;
 	    }
 	    else
+	    {
 		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
+		g_ext_acces_open--;
+	    }
 	}
 
 	g_garage_fenetre.curr =  digitalRead(PIN_GARAGE_FENETRE);
@@ -2671,9 +2703,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La fenetre du garage vient de s'ouvrir");
+		g_ext_acces_open++;
 	    }
 	    else
+	    {
 		send_SMS_alerte("La fenetre du garage vient de se fermer");
+		g_ext_acces_open--;
+	    }
 	}
 
 	g_cellier_porte_ext.curr =  digitalRead(PIN_CELLIER_PORTE_EXT);
@@ -2689,6 +2725,7 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure du cellier vient de s'ouvrir");
+		g_ext_acces_open++;
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = 300000*/
@@ -2705,6 +2742,7 @@ void process_domotix(void)
 		event_del(&g_evt_buzz_before5min_on);
 		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
+		g_ext_acces_open--;
 	    }
 	}
 
@@ -2757,9 +2795,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La Fenetre du bureau vient de s'ouvrir");
+		g_ext_acces_open++;
 	    }
 	    else
+	    {
 		send_SMS_alerte("La Fenetre du bureau vient de se fermer");
+		g_ext_acces_open++;
+	    }
 	}
 
 	g_cuisine_porte_ext.curr = digitalRead(PIN_CUISINE_EXT);
@@ -2775,6 +2817,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de s'ouvrir");
+		g_ext_acces_open++;
+	    }
+	    else
+	    {
+		/* Send SMS */
+		send_SMS_alerte("La porte exterieure de la cuisine vient de se fermer");
+		g_ext_acces_open--;
 	    }
 	}
 
@@ -2791,9 +2840,13 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La Fenetre de la lingerie vient de s'ouvrir");
+		g_ext_acces_open++;
 	    }
 	    else
+	    {
 		send_SMS_alerte("La Fenetre de la lingerie vient de se fermer");
+		g_ext_acces_open--;
+	    }
 	}
 
 	g_entree_porte_ext.curr = digitalRead(PIN_ENTREE_PORTE_EXT);
@@ -2807,8 +2860,15 @@ void process_domotix(void)
 	    /* Critical part */
 	    if (g_entree_porte_ext.curr == 0)
 	    {
-		/* Send SMS */
-		send_SMS_alerte("La porte d'entree vient de s'ouvrir");
+		if (g_ext_acces_open > 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, des accès extérieurs sont restés ouverts");
+		}
+		else
+		{
+		    send_SMS_alerte("La porte d'entree vient de s'ouvrir");
+		}
 	    }
 	    else
 		send_SMS_alerte("La porte d'entree vient de se fermer");
@@ -3020,7 +3080,7 @@ void process_domotix(void)
 	g_temperature_garage_cpt++;
 	g_temperature_garage_total += temp;
 
-	if ((g_temperature_garage_cpt > 1000 ) || (g_temperature_garage_total > 50000))
+	if (g_temperature_garage_cpt > PROCESS_DOMOTIX_CALC_CPT )
 	{
 	    g_temperature_garage = g_temperature_garage_total  / g_temperature_garage_cpt;
 	    g_temperature_garage_total = 0;
@@ -3032,7 +3092,7 @@ void process_domotix(void)
 	g_temperature_bureau_cpt++;
 	g_temperature_bureau_total += temp;
 
-	if ((g_temperature_bureau_cpt > 1000 ) || (g_temperature_bureau_total > 50000))
+	if (g_temperature_bureau_cpt >  PROCESS_DOMOTIX_CALC_CPT)
 	{
 	    g_temperature_bureau = g_temperature_bureau_total  / g_temperature_bureau_cpt;
 	    g_temperature_bureau_total = 0;
@@ -3045,7 +3105,7 @@ void process_domotix(void)
 	g_temperature_grenier_cpt++;
 	g_temperature_grenier_total += temp;
 
-	if ((g_temperature_grenier_cpt > 1000 ) || (g_temperature_grenier_total > 50000))
+	if (g_temperature_grenier_cpt > PROCESS_DOMOTIX_CALC_CPT)
 	{
 	    g_temperature_grenier = g_temperature_grenier_total  / g_temperature_grenier_cpt;
 	    g_temperature_grenier_total = 0;
@@ -3058,7 +3118,7 @@ void process_domotix(void)
 	g_temperature_ext_cpt++;
 	g_temperature_ext_total += temp;
 
-	if ((g_temperature_ext_cpt > 1000 ) || (g_temperature_ext_total > 50000))
+	if (g_temperature_ext_cpt > PROCESS_DOMOTIX_CALC_CPT)
 	{
 	    g_temperature_ext = g_temperature_ext_total  / g_temperature_ext_cpt;
 	    g_temperature_ext_total = 0;
@@ -3068,7 +3128,7 @@ void process_domotix(void)
 	value = analogRead(PIN_METEO_GIROUETTE);
 	g_girouette_cpt++;
 	g_girouette_total += value;
-	if ((g_girouette_cpt > 1000 ) || (g_girouette_total > 50000))
+	if ((g_girouette_cpt > PROCESS_DOMOTIX_CALC_CPT) || (g_girouette_total > 50000))
 	{
 	    g_girouette = g_girouette_total / g_girouette_cpt;
 	    g_girouette_total = 0;
@@ -3105,7 +3165,7 @@ void process_domotix(void)
 	    }
 	    else
 	    {
-		sprintf(g_girouette_string,"Sud Est");
+		sprintf(g_girouette_string,"------");
 	    }
 	}
 
@@ -3153,7 +3213,7 @@ void process_domotix(void)
 
 	/* wait some time, before testing the next time the inputs */
 	g_process_domotix = PROCESS_OFF;
-	g_evt_process_domotix.timeout = 1000;
+	g_evt_process_domotix.timeout = PROCESS_DOMOTIX_TIMEOUT;
 	event_add(&g_evt_process_domotix, callback_wait_pdomotix);
 
 #ifdef DEBUG_EVT
@@ -3168,7 +3228,7 @@ void process_domotix_quick(void)
 
     if (g_process_domotix_quick != PROCESS_OFF)
     {
-	/* Meteo */
+	/* Meteo every 10 sec */
 	if ((millis() - g_beginWait10sec) >= 10000)
 	{
 	    sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC)/10);
@@ -3286,7 +3346,14 @@ void callback_wait_portecellier(void)
     /* Send alerte */
     event_del(&g_evt_buzz_before5min_off);
     event_del(&g_evt_buzz_before5min_on);
-    send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
+    if (g_temperature_ext > 23)
+    {
+	send_SMS("Attention, il fait chaud et la porte du cellier est ouverte");
+    }
+    else
+    {
+	send_SMS_alerte("La porte exterieur du cellier est ouverte depuis 5min");
+    }
     analogWrite(PIN_OUT_BUZZER, 220);
 }
 
@@ -3444,6 +3511,9 @@ void process_schedule(void)
 		{
 		    g_pluvio_max_cpt = g_pluvio_cpt;
 		    sprintf(g_pluvio_max_string,"%d mm", g_pluvio_max_cpt * PLUVIO_UNIT);
+		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
+		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_day);
+		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_mon);
 		}
 		g_pluvio_cpt = 0;
 
@@ -3451,6 +3521,11 @@ void process_schedule(void)
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
 		    sprintf(g_anemo_max_year_string,"%d km/h", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC)/10);
+		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
+		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_hour);
+		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_min);
+		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_day);
+		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_mon);
 		}
 		g_anemo_max_day_cpt = 0;
 
