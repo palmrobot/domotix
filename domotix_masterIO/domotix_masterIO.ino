@@ -16,7 +16,7 @@
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
 
-#define VERSION				"v5.10"
+#define VERSION				"v5.16"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -158,8 +158,7 @@ Master I/O Board                     GSM Board
 uint8_t g_recv_gsm[CMD_DATA_MAX];
 uint8_t g_send_to_gsm[CMD_DATA_MAX];
 
-#define MAX_WAIT_SERIAL				50
-#define TIME_WAIT_SERIAL			10
+#define MAX_WAIT_SERIAL				500
 
 /********************************************************/
 /*      EEPROM Addresses                                */
@@ -222,7 +221,7 @@ uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_WAIT_COMMAND		PROCESS_ON
 
 #define PROCESS_DOMOTIX_TIMEOUT			2000
-#define PROCESS_DOMOTIX_CALC_CPT		500 /* 500 * PROCESS_DOMOTIX_TIMEOUT sec = 1000 sec */
+#define PROCESS_DOMOTIX_CALC_CPT		50 /* => 50*PROCESS_DOMOTIX_TIMEOUT = 10000 sec */
 
 
 /********************************************************/
@@ -314,7 +313,15 @@ int8_t g_temperature_daymin = 60;
 int8_t g_temperature_daymax = -60;
 int8_t g_temperature_yearmin = 60;
 int8_t g_temperature_yearmax = -60;
-int8_t g_ext_acces_open = 0;
+int8_t g_temperature_yearmin_hour;
+int8_t g_temperature_yearmin_min;
+int8_t g_temperature_yearmin_day;
+int8_t g_temperature_yearmin_mon;
+int8_t g_temperature_yearmax_hour;
+int8_t g_temperature_yearmax_min;
+int8_t g_temperature_yearmax_day;
+int8_t g_temperature_yearmax_mon;
+
 char  g_tempdaymin_string[20]; /* 27°C à 17h32 */
 char  g_tempdaymax_string[20];
 char  g_tempyearmin_string[30]; /* 27°C à 17h32 le 23/03 */
@@ -345,20 +352,26 @@ char  g_girouette_string[15]; /* Nord Ouest */
 #define GIROUETTE_MAX_4		300 /* 386 */
 #define GIROUETTE_MAX_3		180 /* 233 */
 #define GIROUETTE_MAX_2		100 /* 132 */
-#define GIROUETTE_MAX_1		0 /* 75 */
+#define GIROUETTE_MAX_1		50  /* 75 */
 
 volatile uint16_t g_pluvio_cpt = 0;
 volatile uint16_t g_pluvio_night_cpt = 0;
 uint16_t g_pluvio_max_cpt = 0;
+uint8_t g_pluvio_max_cpt_day = 0;
+uint8_t g_pluvio_max_cpt_mon = 0;
 
-volatile uint32_t g_anemo_cpt = 0;
-uint32_t g_anemo_max_day_cpt = 0;
-uint32_t g_anemo_max_year_cpt = 0;
+volatile uint16_t g_anemo_cpt = 0;
+uint16_t g_anemo_max_day_cpt = 0;
+uint16_t g_anemo_max_year_cpt = 0;
+uint8_t g_anemo_max_year_cpt_hour = 0;
+uint8_t g_anemo_max_year_cpt_min = 0;
+uint8_t g_anemo_max_year_cpt_day = 0;
+uint8_t g_anemo_max_year_cpt_mon = 0;
 
-volatile uint32_t g_beginWait10sec = 0;
+volatile uint32_t g_beginWait1sec = 0;
 uint16_t g_girouette = 0;
-uint32_t g_girouette_cpt = 0;
-uint32_t g_girouette_total = 0;
+uint16_t g_girouette_cpt = 0;
+uint16_t g_girouette_total = 0;
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -579,13 +592,10 @@ void interrupt_anemo()
 void setup(void)
 {
     uint8_t i;
-    uint8_t hour;
-    uint8_t min;
-    uint8_t day;
-    uint8_t mon;
     int16_t value;
     int16_t value_offset;
     int16_t temp;
+    uint16_t anemo_speed;
 #ifdef DEBUG
     char eeprom_str[20];
 #endif
@@ -688,7 +698,8 @@ void setup(void)
     g_anemo_max_day_cpt = 0;
     g_anemo_max_year_cpt = 0;
 
-    g_beginWait10sec = millis();
+    g_beginWait1sec = millis();
+
     g_girouette = 0;
     g_girouette_cpt = 0;
     g_girouette_total = 0;
@@ -812,10 +823,8 @@ void setup(void)
     value = analogRead(PIN_TEMP_GRENIER);
     g_temperature_grenier  = ((500.0 * value) / 1024) + OFFSET_TEMP_GRENIER;
 
-    g_temperature_daymin = 60;
-    g_temperature_daymax = -60;
-
-    g_ext_acces_open = 0;
+    g_temperature_daymin = g_temperature_ext;
+    g_temperature_daymax = g_temperature_ext;
 
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin); */
@@ -823,18 +832,18 @@ void setup(void)
 
 
     EEPROM.get(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_HOU, hour);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, min);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, day);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_MON, mon);
-    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,hour, min, day, mon);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_HOU, g_temperature_yearmin_hour);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
+    EEPROM.get(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
+    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin, g_temperature_yearmin_hour, g_temperature_yearmin_min, g_temperature_yearmin_day, g_temperature_yearmin_mon);
 
     EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, hour);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, min);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, day);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, mon);
-    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,hour, min, day, mon);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
+    EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
+    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax, g_temperature_yearmax_hour, g_temperature_yearmax_min, g_temperature_yearmax_day, g_temperature_yearmax_mon);
 
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
@@ -844,9 +853,9 @@ void setup(void)
     /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
-    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, day);
-    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, mon);
-    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", g_pluvio_max_cpt * PLUVIO_UNIT, day, mon);
+    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
+    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_pluvio_max_cpt_mon);
+    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", g_pluvio_max_cpt * PLUVIO_UNIT, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
@@ -856,11 +865,12 @@ void setup(void)
     /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, hour);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, min);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, day);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, mon);
-    sprintf(g_anemo_max_year_string,"%d km/h à %02dh%02d le %02d/%02d", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC)/10, hour, min, day, mon);
+    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
+    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
+    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
+    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
+    anemo_speed = g_anemo_max_year_cpt * ANEMO_UNIT_SEC;
+    sprintf(g_anemo_max_year_string,"%d km/h à %02dh%02d le %02d/%02d", anemo_speed, g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min, g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon);
 
     sprintf(g_girouette_string,"------");
     sprintf(g_pluvio_string,"0 mm");
@@ -900,10 +910,10 @@ void setup(void)
     }
 
     /* Initialisation de l'interruption INT0 (comptage pluviometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, RISING);
+    //attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, FALLING);
 
     /* Initialisation de l'interruption INT1 (comptage anemometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, RISING);
+    //attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, FALLING);
 
 #ifdef DEBUG
     PgmPrint("Free RAM: ");
@@ -931,6 +941,28 @@ void save_eeprom()
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
     EEPROM.put(EEPROM_ADDR_WEEK, g_week);
+
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_pluvio_max_cpt_mon);
+
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
+
+    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_temperature_yearmin_hour);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
+    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
+
+    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
+    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
 }
 
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
@@ -938,8 +970,8 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
     uint8_t crc;
     uint8_t recv_crc;
     uint8_t nb_retry;
-    uint8_t nb_wait;
     uint8_t i;
+    uint16_t nb_wait;
 
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
@@ -986,7 +1018,6 @@ void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 	nb_wait = 0;
 	while ((Serial.available() <= 0) && (nb_wait < MAX_WAIT_SERIAL))
 	{
-	    delay(TIME_WAIT_SERIAL);
 	    nb_wait++;
 	}
 
@@ -1258,10 +1289,16 @@ void deal_with_code(File *file, char item, char type, char code)
 	}break;
 	case 'r':
 	{
+	    if (g_debug)
+		g_client.print(g_anemo_cpt);
+	    else
 		g_client.print(g_anemo_string);
 	}break;
 	case 's':
 	{
+	    if (g_debug)
+		g_client.print(g_pluvio_cpt);
+	    else
 		g_client.print(g_pluvio_string);
 	}break;
 	case 't':
@@ -1794,9 +1831,9 @@ void process_recv_gsm(void)
     uint8_t recv_crc;
     uint8_t recv_size;
     uint8_t recv_index;
-    uint8_t nb_wait;
     uint8_t error;
     uint8_t command;
+    uint16_t nb_wait;
 
     if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
@@ -1811,7 +1848,6 @@ void process_recv_gsm(void)
 		nb_wait = 0;
 		while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		{
-		    delay(TIME_WAIT_SERIAL);
 		    nb_wait++;
 		}
 
@@ -1828,7 +1864,6 @@ void process_recv_gsm(void)
 		    nb_wait = 0;
 		    while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 		    {
-			delay(TIME_WAIT_SERIAL);
 			nb_wait++;
 		    }
 
@@ -1858,7 +1893,6 @@ void process_recv_gsm(void)
 				}
 				else
 				{
-				    delay(TIME_WAIT_SERIAL);
 				    nb_wait++;
 				}
 			    }
@@ -1896,7 +1930,6 @@ void process_recv_gsm(void)
 			nb_wait = 0;
 			while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
 			{
-			    delay(TIME_WAIT_SERIAL);
 			    nb_wait++;
 			}
 			if (nb_wait == MAX_WAIT_SERIAL)
@@ -2297,7 +2330,6 @@ void process_ethernet(void)
 		g_client.println(F("<h2>Domotix Error: GET /  Error, line too long!</h2>"));
 	    }
 	    /* close connection */
-	    delay(5);
 	    g_client.stop();
 
 #ifdef DEBUG_HTML
@@ -2659,12 +2691,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte de droite du garage vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		send_SMS_alerte("La porte de droite du garage vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2681,12 +2711,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte de gauche du garage vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2703,12 +2731,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La fenetre du garage vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		send_SMS_alerte("La fenetre du garage vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2725,7 +2751,6 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure du cellier vient de s'ouvrir");
-		g_ext_acces_open++;
 
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = 300000*/
@@ -2742,7 +2767,6 @@ void process_domotix(void)
 		event_del(&g_evt_buzz_before5min_on);
 		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2795,12 +2819,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La Fenetre du bureau vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		send_SMS_alerte("La Fenetre du bureau vient de se fermer");
-		g_ext_acces_open++;
 	    }
 	}
 
@@ -2817,13 +2839,11 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2840,12 +2860,10 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La Fenetre de la lingerie vient de s'ouvrir");
-		g_ext_acces_open++;
 	    }
 	    else
 	    {
 		send_SMS_alerte("La Fenetre de la lingerie vient de se fermer");
-		g_ext_acces_open--;
 	    }
 	}
 
@@ -2860,10 +2878,40 @@ void process_domotix(void)
 	    /* Critical part */
 	    if (g_entree_porte_ext.curr == 0)
 	    {
-		if (g_ext_acces_open > 0)
+		if (g_garage_droite.curr == 0)
 		{
 		    /* Send SMS */
-		    send_SMS("Attention, des accès extérieurs sont restés ouverts");
+		    send_SMS("Attention, la porte de droite du garage est ouverte");
+		}
+		else if (g_garage_gauche.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la porte de gauche du garage est ouverte");
+		}
+		else if (g_garage_fenetre.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la fenetre du garage est ouverte");
+		}
+		else if (g_cellier_porte_ext.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la porte du cellier est ouverte");
+		}
+		else if (g_bureau_fenetre.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la fenetre du bureau est ouverte");
+		}
+		else if (g_cuisine_porte_ext.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la porte de la cuisine est ouverte");
+		}
+		else if (g_lingerie_fenetre.curr == 0)
+		{
+		    /* Send SMS */
+		    send_SMS("Attention, la fenetre de la lingerie est ouverte");
 		}
 		else
 		{
@@ -3128,7 +3176,7 @@ void process_domotix(void)
 	value = analogRead(PIN_METEO_GIROUETTE);
 	g_girouette_cpt++;
 	g_girouette_total += value;
-	if ((g_girouette_cpt > PROCESS_DOMOTIX_CALC_CPT) || (g_girouette_total > 50000))
+	if (g_girouette_cpt > PROCESS_DOMOTIX_CALC_CPT)
 	{
 	    g_girouette = g_girouette_total / g_girouette_cpt;
 	    g_girouette_total = 0;
@@ -3137,31 +3185,35 @@ void process_domotix(void)
 
 	    if (g_girouette > GIROUETTE_MAX_8)
 	    {
-		sprintf(g_girouette_string,"Nord Ouest");
+		sprintf(g_girouette_string,"Sud Est");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_7)
 	    {
-		sprintf(g_girouette_string,"Nord");
+		sprintf(g_girouette_string,"Sud");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_6)
 	    {
-		sprintf(g_girouette_string,"Nord Est");
+		sprintf(g_girouette_string,"Sud Ouest");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_5)
 	    {
-		sprintf(g_girouette_string,"Ouest");
+		sprintf(g_girouette_string,"Est");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_4)
 	    {
-		sprintf(g_girouette_string,"Est");
+		sprintf(g_girouette_string,"Ouest");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_3)
 	    {
-		sprintf(g_girouette_string,"Sud Ouest");
+		sprintf(g_girouette_string,"Nord Est");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_2)
 	    {
-		sprintf(g_girouette_string,"Sud");
+		sprintf(g_girouette_string,"Nord");
+	    }
+	    else if (g_girouette > GIROUETTE_MAX_1)
+	    {
+		sprintf(g_girouette_string,"Nord Ouest");
 	    }
 	    else
 	    {
@@ -3184,7 +3236,8 @@ void process_domotix(void)
 	    g_temperature_daymin = g_temperature_ext;
 	    sprintf(g_tempdaymin_string,"%d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
 	}
-	else if (g_temperature_ext >= g_temperature_daymax)
+
+	if (g_temperature_ext >= g_temperature_daymax)
 	{
 	    g_temperature_daymax = g_temperature_ext;
 	    sprintf(g_tempdaymax_string,"%d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
@@ -3194,21 +3247,24 @@ void process_domotix(void)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_hour);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_min);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_day);
-	    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_mon);
+
+	    /* save values for eeprom write à midnight */
+	    g_temperature_yearmin_hour = g_hour;
+	    g_temperature_yearmin_min = g_min;
+	    g_temperature_yearmin_day = g_day;
+	    g_temperature_yearmin_mon = g_mon;
 	}
-	else if (g_temperature_ext >= g_temperature_yearmax)
+
+	if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_hour);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_min);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_day);
-	    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_mon);
+
+	    /* save values for eeprom write à midnight */
+	    g_temperature_yearmax_hour = g_hour;
+	    g_temperature_yearmax_min = g_min;
+	    g_temperature_yearmax_day = g_day;
+	    g_temperature_yearmax_mon = g_mon;
 	}
 
 	/* wait some time, before testing the next time the inputs */
@@ -3229,18 +3285,18 @@ void process_domotix_quick(void)
     if (g_process_domotix_quick != PROCESS_OFF)
     {
 	/* Meteo every 10 sec */
-	if ((millis() - g_beginWait10sec) >= 10000)
-	{
-	    sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC)/10);
-	    if (g_anemo_cpt >= g_anemo_max_day_cpt)
-	    {
-		g_anemo_max_day_cpt = g_anemo_cpt;
-		sprintf(g_anemo_max_day_string,"%d km/h", (g_anemo_max_day_cpt * ANEMO_UNIT_SEC)/10);
-	    }
+	/* if ((millis() - g_beginWait1sec) >= 1000) */
+	/* { */
+	/*     sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC)); */
+	/*     if (g_anemo_cpt > g_anemo_max_day_cpt) */
+	/*     { */
+	/* 	g_anemo_max_day_cpt = g_anemo_cpt; */
+	/* 	sprintf(g_anemo_max_day_string,"%d km/h", (g_anemo_max_day_cpt * ANEMO_UNIT_SEC)); */
+	/*     } */
 
-	    g_anemo_cpt = 0;
-	    g_beginWait10sec = millis();
-	}
+	/*     g_anemo_cpt = 0; */
+	/*     g_beginWait1sec = millis(); */
+	/* } */
 
 	/* heure creuse ? */
 	if (((g_hour100 > 200) && (g_hour100 < 700)) ||
@@ -3511,28 +3567,25 @@ void process_schedule(void)
 		{
 		    g_pluvio_max_cpt = g_pluvio_cpt;
 		    sprintf(g_pluvio_max_string,"%d mm", g_pluvio_max_cpt * PLUVIO_UNIT);
-		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
-		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_day);
-		    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_mon);
+		    g_pluvio_max_cpt_day = g_day;
+		    g_pluvio_max_cpt_mon = g_mon;
 		}
 		g_pluvio_cpt = 0;
 
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%d km/h", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC)/10);
-		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
-		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_hour);
-		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_min);
-		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_day);
-		     EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_mon);
+		    sprintf(g_anemo_max_year_string,"%d km/h", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC));
+		    g_anemo_max_year_cpt_hour = g_hour;
+		    g_anemo_max_year_cpt_min = g_min;
+		    g_anemo_max_year_cpt_day = g_day;
+		    g_anemo_max_year_cpt_mon = g_mon;
 		}
 		g_anemo_max_day_cpt = 0;
 
 		/* reset temperatures counters*/
-		g_temperature_daymin = 60;
-		g_temperature_daymax = -60;
-		g_sched_daymin_sms = 0;
+		g_temperature_daymin = g_temperature_ext;
+		g_temperature_daymax = g_temperature_ext;
 
 		/* write in file  edf counters */
 		sprintf(data1,"%lu", g_edf_hc.value);
@@ -3684,9 +3737,6 @@ void process_action(void)
 		{
 		    g_timezone = 2;
 		}
-		send_SMS("Givre probable sur les voitures");
-
-		save_eeprom();
 	    }
 	    break;
 	    default:
