@@ -7,7 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-/* #define DEBUG */
+/* #define DEBUG_SERIAL */
 /* #define DEBUG_TEMP */
 /* #define DEBUG_EVT */
 /* #define DEBUG_EDF */
@@ -15,8 +15,11 @@
 /* #define DEBUG_SENSOR */
 /* #define DEBUG_ITEM */
 /* #define DEBUG_SMS*/
+/* #define DEBUG_MEM */
+/* #define DEBUG_NTP*/
+/* #define DEBUG_METEO */
 
-#define VERSION				"v5.16"
+#define VERSION				"v5.17"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -197,9 +200,13 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 #define PROCESS_OFF			0
 #define PROCESS_ON			1
 
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
 uint8_t g_process_serial;
-#endif /* DEBUG */
+#endif /* DEBUG_SERIAL */
+
+#ifdef DEBUG_METEO
+uint32_t g_cpt_milli = 0;
+#endif /* METEO */
 
 uint8_t g_process_ethernet;
 uint8_t g_process_domotix;
@@ -221,8 +228,7 @@ uint8_t g_process_recv_gsm;
 #define PROCESS_RECV_GSM_WAIT_COMMAND		PROCESS_ON
 
 #define PROCESS_DOMOTIX_TIMEOUT			2000
-#define PROCESS_DOMOTIX_CALC_CPT		50 /* => 50*PROCESS_DOMOTIX_TIMEOUT = 10000 sec */
-
+#define PROCESS_DOMOTIX_CALC_CPT		50 /* => 50*PROCESS_DOMOTIX_TIMEOUT = 10000 msec = 10sec */
 
 /********************************************************/
 /*      Global definitions                              */
@@ -336,7 +342,7 @@ int16_t  g_temperature_garage_cpt = 0;
 int16_t  g_temperature_garage_total = 0;
 char  g_pluvio_string[10]; /* 123mm */
 char  g_pluvio_night_string[10]; /* 123mm */
-char  g_pluvio_max_string[20]; /* 123mm le 23/03 */
+char  g_pluvio_max_string[30]; /* 123mm le 23/03 */
 char  g_anemo_string[10]; /* 132 km/h */
 char  g_anemo_max_day_string[10]; /* 132 km/h */
 char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
@@ -596,8 +602,9 @@ void setup(void)
     int16_t value_offset;
     int16_t temp;
     uint16_t anemo_speed;
-#ifdef DEBUG
+#ifdef DEBUG_MEM
     char eeprom_str[20];
+    uint8_t hour;
 #endif
 
     /* Init Input Ports */
@@ -647,7 +654,7 @@ void setup(void)
     analogWrite(PIN_OUT_BUZZER, 0);
 
     /* init Process */
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
     g_process_serial   = PROCESS_ON;
 #endif
 
@@ -660,7 +667,7 @@ void setup(void)
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
 
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
     /* initialize serial communications at 115200 bps */
     Serial.begin(115200);
     delay(100);
@@ -910,12 +917,12 @@ void setup(void)
     }
 
     /* Initialisation de l'interruption INT0 (comptage pluviometre) */
-    //attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, FALLING);
 
     /* Initialisation de l'interruption INT1 (comptage anemometre) */
-    //attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, FALLING);
 
-#ifdef DEBUG
+#ifdef DEBUG_MEM
     PgmPrint("Free RAM: ");
     Serial.println(FreeRam());
 
@@ -927,7 +934,9 @@ void setup(void)
 	sprintf(eeprom_str,"%02d:%02d", i, hour);
 	Serial.println(eeprom_str);
     }
+#endif
 
+#ifdef DEBUG_SERIAL
     PgmPrintln("Init OK");
 #endif
 }
@@ -1690,7 +1699,7 @@ void send_file_full_list(char *file, uint8_t nb_item)
 /*      NTP functions                                   */
 /********************************************************/
 
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
 void digitalClockDisplaySerial(void)
 {
     /* save current date and clock in global var */
@@ -1723,7 +1732,7 @@ time_t getNtpTime(void)
     /* discard any previously received packets */
     while (g_Udp.parsePacket() > 0);
 
-#ifdef DEBUG
+#ifdef DEBUG_NTP
     Serial.println("Transmit NTP");
 #endif
 
@@ -1737,7 +1746,7 @@ time_t getNtpTime(void)
 	if (size >= NTP_PACKET_SIZE)
 	{
 
-#ifdef DEBUG
+#ifdef DEBUG_NTP
 	    Serial.println("Receive NTP");
 #endif
 
@@ -1756,7 +1765,7 @@ time_t getNtpTime(void)
 	    return secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR;
 	}
     }
-#ifdef DEBUG
+#ifdef DEBUG_NTP
     Serial.println("No NTP :-(");
 #endif
     return 0;
@@ -1794,7 +1803,7 @@ void sendNTPpacket(char *address)
 /*      Process                                         */
 /********************************************************/
 
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
 void process_serial(void)
 {
     uint16_t count;
@@ -3271,10 +3280,6 @@ void process_domotix(void)
 	g_process_domotix = PROCESS_OFF;
 	g_evt_process_domotix.timeout = PROCESS_DOMOTIX_TIMEOUT;
 	event_add(&g_evt_process_domotix, callback_wait_pdomotix);
-
-#ifdef DEBUG_EVT
-	/* Serial.println(DateTime.now()); */
-#endif
     }
 }
 
@@ -3284,19 +3289,35 @@ void process_domotix_quick(void)
 
     if (g_process_domotix_quick != PROCESS_OFF)
     {
-	/* Meteo every 10 sec */
-	/* if ((millis() - g_beginWait1sec) >= 1000) */
-	/* { */
-	/*     sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC)); */
-	/*     if (g_anemo_cpt > g_anemo_max_day_cpt) */
-	/*     { */
-	/* 	g_anemo_max_day_cpt = g_anemo_cpt; */
-	/* 	sprintf(g_anemo_max_day_string,"%d km/h", (g_anemo_max_day_cpt * ANEMO_UNIT_SEC)); */
-	/*     } */
+	/* Meteo every 1 sec */
+	if ((millis() - g_beginWait1sec) >= 1000)
+	{
+	    g_beginWait1sec = millis();
+	    sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC));
+	    if (g_anemo_cpt > g_anemo_max_day_cpt)
+	    {
+		g_anemo_max_day_cpt = g_anemo_cpt;
+		g_anemo_cpt = 0;
+		sprintf(g_anemo_max_day_string,"%d km/h", (g_anemo_max_day_cpt * ANEMO_UNIT_SEC));
+	    }
 
-	/*     g_anemo_cpt = 0; */
-	/*     g_beginWait1sec = millis(); */
-	/* } */
+#ifdef DEBUG_METEO
+	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
+	    Serial.print("Pluviometre = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.print(g_pluvio_cpt * PLUVIO_UNIT);Serial.println(" mm");
+	    Serial.print("Anemometre  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.print(g_anemo_cpt * ANEMO_UNIT_SEC);Serial.println(" km/h");
+#endif
+	    g_anemo_cpt = 0;
+
+#ifdef DEBUG_METEO
+	    g_cpt_milli = 0;
+#endif
+	}
+#ifdef DEBUG_METEO
+	else
+	{
+	    g_cpt_milli++;
+	}
+#endif
 
 	/* heure creuse ? */
 	if (((g_hour100 > 200) && (g_hour100 < 700)) ||
@@ -3775,7 +3796,7 @@ void loop(void)
 {
     process_time();
     process_ethernet();
-#ifdef DEBUG
+#ifdef DEBUG_SERIAL
     process_serial();
 #endif
     process_recv_gsm();
