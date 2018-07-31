@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.17"
+#define VERSION				"v5.21"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -289,13 +289,15 @@ state_lumiere_s g_grenier_lumiere; /* p */
 #define THRESHOLD_LIGHT_ON_GRENIER	400
 #define OFFSET_TEMP_BUREAU		2
 #define OFFSET_TEMP_EXT			2
-#define OFFSET_TEMP_GRENIER		5
+#define OFFSET_TEMP_GRENIER		2
 
 #define LIGHT_OFF			0
 #define LIGHT_ON			1
 
 #define LAMPE_OFF			1
 #define LAMPE_ON			0
+
+#define THRESHOLD_EDF			180
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
@@ -343,13 +345,14 @@ int16_t  g_temperature_garage_total = 0;
 char  g_pluvio_string[10]; /* 123mm */
 char  g_pluvio_night_string[10]; /* 123mm */
 char  g_pluvio_max_string[30]; /* 123mm le 23/03 */
-char  g_anemo_string[10]; /* 132 km/h */
-char  g_anemo_max_day_string[10]; /* 132 km/h */
+char  g_anemo_string[15]; /* 132 km/h */
+char  g_anemo_max_day_string[15]; /* 132 km/h */
 char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
 
 #define PLUVIO_UNIT     0.2794
 #define ANEMO_UNIT_SEC  2.4
+#define ANEMO_10_SEC    24
 
 #define GIROUETTE_MAX_8		870 /* 930 */
 #define GIROUETTE_MAX_7		770 /* 836 */
@@ -375,6 +378,7 @@ uint8_t g_anemo_max_year_cpt_day = 0;
 uint8_t g_anemo_max_year_cpt_mon = 0;
 
 volatile uint32_t g_beginWait1sec = 0;
+volatile uint32_t g_beginWait100msec = 0;
 uint16_t g_girouette = 0;
 uint16_t g_girouette_cpt = 0;
 uint16_t g_girouette_total = 0;
@@ -601,16 +605,15 @@ void setup(void)
     int16_t value;
     int16_t value_offset;
     int16_t temp;
-    uint16_t anemo_speed;
+    uint16_t pluvio;
 #ifdef DEBUG_MEM
     char eeprom_str[20];
     uint8_t hour;
 #endif
 
     /* Init Input Ports */
-    pinMode(PIN_METEO_PLUVIOMETRE, INPUT);
-    pinMode(PIN_METEO_ANEMOMETRE, INPUT);
-    pinMode(PIN_METEO_GIROUETTE, INPUT);
+    pinMode(PIN_METEO_PLUVIOMETRE, INPUT_PULLUP);
+    pinMode(PIN_METEO_ANEMOMETRE, INPUT_PULLUP);
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
     pinMode(PIN_GARAGE_FENETRE, INPUT);
@@ -706,6 +709,7 @@ void setup(void)
     g_anemo_max_year_cpt = 0;
 
     g_beginWait1sec = millis();
+    g_beginWait100msec = g_beginWait1sec;
 
     g_girouette = 0;
     g_girouette_cpt = 0;
@@ -862,7 +866,8 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_pluvio_max_cpt_mon);
-    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", g_pluvio_max_cpt * PLUVIO_UNIT, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
+    pluvio = g_pluvio_max_cpt * PLUVIO_UNIT;
+    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
@@ -876,8 +881,11 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-    anemo_speed = g_anemo_max_year_cpt * ANEMO_UNIT_SEC;
-    sprintf(g_anemo_max_year_string,"%d km/h à %02dh%02d le %02d/%02d", anemo_speed, g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min, g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon);
+    sprintf(g_anemo_max_year_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+	(uint16_t)(g_anemo_max_year_cpt * ANEMO_UNIT_SEC),
+	(uint16_t)((g_anemo_max_year_cpt * ANEMO_10_SEC)%10),
+	g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min,
+	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon);
 
     sprintf(g_girouette_string,"------");
     sprintf(g_pluvio_string,"0 mm");
@@ -3267,7 +3275,7 @@ void process_domotix(void)
 	if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
-	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d", g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
 
 	    /* save values for eeprom write à midnight */
 	    g_temperature_yearmax_hour = g_hour;
@@ -3293,22 +3301,30 @@ void process_domotix_quick(void)
 	if ((millis() - g_beginWait1sec) >= 1000)
 	{
 	    g_beginWait1sec = millis();
-	    sprintf(g_anemo_string,"%d km/h", (g_anemo_cpt * ANEMO_UNIT_SEC));
+	    sprintf(g_anemo_string,"%d.%d km/h",
+		(uint16_t)(g_anemo_cpt * ANEMO_UNIT_SEC),
+		(uint16_t)((g_anemo_cpt * ANEMO_10_SEC)%10));
 	    if (g_anemo_cpt > g_anemo_max_day_cpt)
 	    {
 		g_anemo_max_day_cpt = g_anemo_cpt;
 		g_anemo_cpt = 0;
-		sprintf(g_anemo_max_day_string,"%d km/h", (g_anemo_max_day_cpt * ANEMO_UNIT_SEC));
+		sprintf(g_anemo_max_day_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_UNIT_SEC),
+		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_10_SEC)%10), g_hour, g_min, g_day, g_mon);
 	    }
 
-#ifdef DEBUG_METEO
-	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
-	    Serial.print("Pluviometre = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.print(g_pluvio_cpt * PLUVIO_UNIT);Serial.println(" mm");
-	    Serial.print("Anemometre  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.print(g_anemo_cpt * ANEMO_UNIT_SEC);Serial.println(" km/h");
-#endif
+	    sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
+
 	    g_anemo_cpt = 0;
 
 #ifdef DEBUG_METEO
+	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
+	    Serial.print("g_pluvio_cpt = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.println(g_pluvio_string);
+	    Serial.print("g_pluvio_night_cpt = ");Serial.print(g_pluvio_night_cpt);Serial.print(" / ");
+	    Serial.println(g_pluvio_night_string);
+	    Serial.print("g_anemo_cpt  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.println(g_anemo_string);
+	    Serial.print("g_anemo_max_day_cpt = ");Serial.print(g_anemo_max_day_cpt);Serial.print(" / ");
+	    Serial.println(g_anemo_max_day_string);
 	    g_cpt_milli = 0;
 #endif
 	}
@@ -3330,18 +3346,17 @@ void process_domotix_quick(void)
 	    edf = &g_edf_hp;
 	}
 
-	edf->curr = analogRead(PIN_EDF);
+	if ((millis() - g_beginWait100msec) >= 100)
+	{
+	    edf->curr = analogRead(PIN_EDF);
 
 #ifdef DEBUG_EDF
-	Serial.print(edf->curr);
+	    uint16_t value;
+	    value = edf->curr;
+	    Serial.print(value);
 #endif
 
-	if ( (edf->curr > (edf->old + 40)) ||
-	    ((edf->curr + 40) < edf->old) )
-	{
-	    edf->old = edf->curr;
-
-	    if (edf->curr > 80)
+	    if (edf->curr > THRESHOLD_EDF)
 	    {
 		edf->state_curr = 1;
 #ifdef DEBUG_EDF
@@ -3564,7 +3579,7 @@ void process_schedule(void)
 	    {
 		if (g_hour100 == 800)
 		{
-			sprintf(g_pluvio_night_string,"%d mm", g_pluvio_night_cpt * PLUVIO_UNIT);
+		    sprintf(g_pluvio_night_string,"%d mm", (uint16_t)(g_pluvio_night_cpt * PLUVIO_UNIT));
 		}
 		g_sched_night = 1;
 		g_pluvio_night_cpt = 0;
@@ -3583,20 +3598,20 @@ void process_schedule(void)
 		g_sched_midnight = 1;
 
 		/* reset meteo values */
-		sprintf(g_pluvio_string,"%d mm", g_pluvio_cpt * PLUVIO_UNIT);
 		if (g_pluvio_cpt >= g_pluvio_max_cpt)
 		{
 		    g_pluvio_max_cpt = g_pluvio_cpt;
-		    sprintf(g_pluvio_max_string,"%d mm", g_pluvio_max_cpt * PLUVIO_UNIT);
+		    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", (uint16_t)(g_pluvio_max_cpt * PLUVIO_UNIT), g_day, g_mon);
 		    g_pluvio_max_cpt_day = g_day;
 		    g_pluvio_max_cpt_mon = g_mon;
 		}
-		g_pluvio_cpt = 0;
 
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%d km/h", (g_anemo_max_year_cpt * ANEMO_UNIT_SEC));
+		    sprintf(g_anemo_max_year_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+			(uint16_t)(g_anemo_max_year_cpt * ANEMO_UNIT_SEC),
+			(uint16_t)((g_anemo_max_year_cpt * ANEMO_10_SEC)%10), g_hour, g_min, g_day, g_mon);
 		    g_anemo_max_year_cpt_hour = g_hour;
 		    g_anemo_max_year_cpt_min = g_min;
 		    g_anemo_max_year_cpt_day = g_day;
@@ -3758,6 +3773,9 @@ void process_action(void)
 		{
 		    g_timezone = 2;
 		}
+
+		/* save all in eeprom */
+		save_eeprom();
 	    }
 	    break;
 	    default:
