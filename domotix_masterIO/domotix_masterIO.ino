@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.21"
+#define VERSION				"v5.25"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -297,7 +297,7 @@ state_lumiere_s g_grenier_lumiere; /* p */
 #define LAMPE_OFF			1
 #define LAMPE_ON			0
 
-#define THRESHOLD_EDF			180
+#define THRESHOLD_EDF			210
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
@@ -345,8 +345,8 @@ int16_t  g_temperature_garage_total = 0;
 char  g_pluvio_string[10]; /* 123mm */
 char  g_pluvio_night_string[10]; /* 123mm */
 char  g_pluvio_max_string[30]; /* 123mm le 23/03 */
-char  g_anemo_string[15]; /* 132 km/h */
-char  g_anemo_max_day_string[15]; /* 132 km/h */
+char  g_anemo_string[30]; /* 132 km/h */
+char  g_anemo_max_day_string[30]; /* 132 km/h */
 char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
 
@@ -378,7 +378,7 @@ uint8_t g_anemo_max_year_cpt_day = 0;
 uint8_t g_anemo_max_year_cpt_mon = 0;
 
 volatile uint32_t g_beginWait1sec = 0;
-volatile uint32_t g_beginWait100msec = 0;
+volatile uint32_t g_beginWait3msec = 0;
 uint16_t g_girouette = 0;
 uint16_t g_girouette_cpt = 0;
 uint16_t g_girouette_total = 0;
@@ -612,8 +612,8 @@ void setup(void)
 #endif
 
     /* Init Input Ports */
-    pinMode(PIN_METEO_PLUVIOMETRE, INPUT_PULLUP);
-    pinMode(PIN_METEO_ANEMOMETRE, INPUT_PULLUP);
+    pinMode(PIN_METEO_PLUVIOMETRE, INPUT);
+    pinMode(PIN_METEO_ANEMOMETRE, INPUT);
     pinMode(PIN_GARAGE_DROITE, INPUT);
     pinMode(PIN_GARAGE_GAUCHE, INPUT);
     pinMode(PIN_GARAGE_FENETRE, INPUT);
@@ -709,7 +709,7 @@ void setup(void)
     g_anemo_max_year_cpt = 0;
 
     g_beginWait1sec = millis();
-    g_beginWait100msec = g_beginWait1sec;
+    g_beginWait3msec = g_beginWait1sec;
 
     g_girouette = 0;
     g_girouette_cpt = 0;
@@ -847,14 +847,14 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
     EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
     EEPROM.get(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
-    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin, g_temperature_yearmin_hour, g_temperature_yearmin_min, g_temperature_yearmin_day, g_temperature_yearmin_mon);
+    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
 
     EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
-    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmax, g_temperature_yearmax_hour, g_temperature_yearmax_min, g_temperature_yearmax_day, g_temperature_yearmax_mon);
+    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
 
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
@@ -881,11 +881,12 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-    sprintf(g_anemo_max_year_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 	(uint16_t)(g_anemo_max_year_cpt * ANEMO_UNIT_SEC),
 	(uint16_t)((g_anemo_max_year_cpt * ANEMO_10_SEC)%10),
-	g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min,
-	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon);
+	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon,
+	g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min);
+
 
     sprintf(g_girouette_string,"------");
     sprintf(g_pluvio_string,"0 mm");
@@ -1070,8 +1071,6 @@ void send_SMS_P(PGM_P str, uint8_t alerte)
 	if (len > CMD_DATA_MAX)
 	    len = CMD_DATA_MAX-1;
 
-	/* for(i = 0; i < len ; i++ ) */
-	/*     g_send_to_gsm[i] = pgm_read_byte(str+i); */
 	strncpy_P((char *)g_send_to_gsm, str, len);
 
 	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, len);
@@ -1316,7 +1315,10 @@ void deal_with_code(File *file, char item, char type, char code)
 	    if (g_debug)
 		g_client.print(g_pluvio_cpt);
 	    else
+	    {
+		sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
 		g_client.print(g_pluvio_string);
+	    }
 	}break;
 	case 't':
 	{
@@ -1362,11 +1364,11 @@ void deal_with_code(File *file, char item, char type, char code)
 	{
 	    if (g_NTP)
 	    {
-		g_client.print(g_clock);
-		g_client.print("  ");
 		g_client.print(g_tab_week[g_week]);
-		g_client.print(" ");
+		g_client.print("  ");
 		g_client.print(g_date);
+		g_client.print(" ");
+		g_client.print(g_clock);
 	    }
 	    /* debug code ( $y00 ) must be set after time in .html page */
 	    g_debug = 0;
@@ -3202,35 +3204,35 @@ void process_domotix(void)
 
 	    if (g_girouette > GIROUETTE_MAX_8)
 	    {
-		sprintf(g_girouette_string,"Sud Est");
+		sprintf(g_girouette_string,"Nord Ouest");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_7)
 	    {
-		sprintf(g_girouette_string,"Sud");
+		sprintf(g_girouette_string,"Nord");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_6)
 	    {
-		sprintf(g_girouette_string,"Sud Ouest");
+		sprintf(g_girouette_string,"Nord Est");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_5)
 	    {
-		sprintf(g_girouette_string,"Est");
+		sprintf(g_girouette_string,"Ouest");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_4)
 	    {
-		sprintf(g_girouette_string,"Ouest");
+		sprintf(g_girouette_string,"Est");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_3)
 	    {
-		sprintf(g_girouette_string,"Nord Est");
+		sprintf(g_girouette_string,"Sud Ouest");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_2)
 	    {
-		sprintf(g_girouette_string,"Nord");
+		sprintf(g_girouette_string,"Sud");
 	    }
 	    else if (g_girouette > GIROUETTE_MAX_1)
 	    {
-		sprintf(g_girouette_string,"Nord Ouest");
+		sprintf(g_girouette_string,"Sud Est");
 	    }
 	    else
 	    {
@@ -3263,7 +3265,7 @@ void process_domotix(void)
 	if (g_temperature_ext <= g_temperature_yearmin)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
-	    sprintf(g_tempyearmin_string,"%d°C à %02dh%02d le %02d/%02d",g_temperature_yearmin ,g_hour, g_min, g_day, g_mon);
+	    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
 
 	    /* save values for eeprom write à midnight */
 	    g_temperature_yearmin_hour = g_hour;
@@ -3275,7 +3277,7 @@ void process_domotix(void)
 	if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
-	    sprintf(g_tempyearmax_string,"%d°C à %02dh%02d le %02d/%02d", g_temperature_yearmax ,g_hour, g_min, g_day, g_mon);
+	    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
 
 	    /* save values for eeprom write à midnight */
 	    g_temperature_yearmax_hour = g_hour;
@@ -3301,24 +3303,25 @@ void process_domotix_quick(void)
 	if ((millis() - g_beginWait1sec) >= 1000)
 	{
 	    g_beginWait1sec = millis();
+
 	    sprintf(g_anemo_string,"%d.%d km/h",
 		(uint16_t)(g_anemo_cpt * ANEMO_UNIT_SEC),
 		(uint16_t)((g_anemo_cpt * ANEMO_10_SEC)%10));
+
 	    if (g_anemo_cpt > g_anemo_max_day_cpt)
 	    {
 		g_anemo_max_day_cpt = g_anemo_cpt;
 		g_anemo_cpt = 0;
-		sprintf(g_anemo_max_day_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_UNIT_SEC),
-		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_10_SEC)%10), g_hour, g_min, g_day, g_mon);
+		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_10_SEC)%10), g_day, g_mon, g_hour, g_min);
 	    }
-
-	    sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
 
 	    g_anemo_cpt = 0;
 
 #ifdef DEBUG_METEO
 	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
+	    sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
 	    Serial.print("g_pluvio_cpt = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.println(g_pluvio_string);
 	    Serial.print("g_pluvio_night_cpt = ");Serial.print(g_pluvio_night_cpt);Serial.print(" / ");
 	    Serial.println(g_pluvio_night_string);
@@ -3346,8 +3349,9 @@ void process_domotix_quick(void)
 	    edf = &g_edf_hp;
 	}
 
-	if ((millis() - g_beginWait100msec) >= 100)
+	if ((millis() - g_beginWait3msec) >= 3)
 	{
+	    g_beginWait3msec = millis();
 	    edf->curr = analogRead(PIN_EDF);
 
 #ifdef DEBUG_EDF
@@ -3581,8 +3585,13 @@ void process_schedule(void)
 		{
 		    sprintf(g_pluvio_night_string,"%d mm", (uint16_t)(g_pluvio_night_cpt * PLUVIO_UNIT));
 		}
+		else
+		{
+		    /* g_hour100 == 2000 */
+		    g_pluvio_night_cpt = 0;
+		}
+
 		g_sched_night = 1;
-		g_pluvio_night_cpt = 0;
 	    }
 	}
 	else
@@ -3605,13 +3614,14 @@ void process_schedule(void)
 		    g_pluvio_max_cpt_day = g_day;
 		    g_pluvio_max_cpt_mon = g_mon;
 		}
+		g_pluvio_cpt = 0;
 
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%d.%d km/h à %02dh%02d le %02d/%02d",
+		    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 			(uint16_t)(g_anemo_max_year_cpt * ANEMO_UNIT_SEC),
-			(uint16_t)((g_anemo_max_year_cpt * ANEMO_10_SEC)%10), g_hour, g_min, g_day, g_mon);
+			(uint16_t)((g_anemo_max_year_cpt * ANEMO_10_SEC)%10), g_day, g_mon, g_hour, g_min);
 		    g_anemo_max_year_cpt_hour = g_hour;
 		    g_anemo_max_year_cpt_min = g_min;
 		    g_anemo_max_year_cpt_day = g_day;
@@ -3717,7 +3727,7 @@ void process_schedule(void)
 
 	if (g_start == 0)
 	{
-	    sprintf(g_start_date,"%s %s",g_clock, g_date);
+	    sprintf(g_start_date,"%s %s", g_date, g_clock);
 	    g_start = 1;
 	}
     }
