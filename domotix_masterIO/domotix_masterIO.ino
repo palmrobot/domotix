@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.27"
+#define VERSION				"v5.30"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -113,15 +113,11 @@
 Master I/O Board                     GSM Board
     |                                    |
     |                                    |
-    |--START CMD NB_DATA DATA CRC------->|
-    |<----------ACK CRC------------------|
+    |--   START CMD NB_DATA DATA ------->|
     |                                    |
-    |-- FA 82 XX "message to send" YY -> | Message to send by SMS
-    |<--------- FB YY--------------------| Ack with CRC from sent data
+    |--   FA 82 XX "message to send"  -> | Message to send by SMS
     |                                    |
-    |-- FA 83 XX "message to send" YY -> | Message to ask if GSM is init
-    |<--------- FB YY--------------------| Ack with CRC from sent data
-
+    |--   FA 83 XX "message to send"  -> | Message to ask if GSM is init
     |                                    |
 */
 
@@ -155,6 +151,7 @@ Master I/O Board                     GSM Board
 
 
 #define CMD_DATA_MAX				60
+#define MIN_CMD_SIZE				3
 
 uint8_t g_recv_gsm[CMD_DATA_MAX];
 uint8_t g_send_to_gsm[CMD_DATA_MAX];
@@ -983,69 +980,24 @@ void save_eeprom()
 
 void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
 {
-    uint8_t crc;
-    uint8_t recv_crc;
-    uint8_t nb_retry;
-    uint8_t i;
-    uint16_t nb_wait;
-
     if (size > CMD_DATA_MAX)
 	size = CMD_DATA_MAX;
 
-    nb_retry = 3;
-    recv_crc = 0;
-    do
+    /* Send byte of Start of transmission */
+    Serial.write(COMMAND_START);
+
+    /* Send byte of Command  */
+    Serial.write(cmd);
+
+    /* Send byte of Size of data */
+    Serial.write(size);
+
+    /* Write Data */
+    if ((buffer != NULL) && (size > 0))
     {
-	/* Send byte of Start of transmission */
-	Serial.write(COMMAND_START);
-
-	/* Send byte of Command  */
-	Serial.write(cmd);
-
-	/* Send byte of Size of data */
-	Serial.write(size);
-
-	/* Write Data */
-	if ((buffer != NULL) && (size > 0))
-	{
-	    Serial.write(buffer, size);
-	    Serial.flush();
-
-	    /* Calcul CRC */
-	    crc = 0;
-	    for(i = 0; i < size ; i ++)
-	    {
-		crc += buffer[i];
-	    }
-
-	    if (crc == 0)
-		crc++;
-	}
-	else
-	{
-	    /* arbitrary value */
-	    crc = 42;
-	}
-
-	/* Send byte of CRC */
-	Serial.write(crc);
-
-	/* wait for answer */
-	nb_wait = 0;
-	while ((Serial.available() <= 0) && (nb_wait < MAX_WAIT_SERIAL))
-	{
-	    nb_wait++;
-	}
-
-	if (nb_wait < MAX_WAIT_SERIAL)
-	{
-	    /* then read crc */
-	    recv_crc = Serial.read();
-
-	    nb_retry--;
-	}
+	Serial.write(buffer, size);
     }
-    while ((crc != recv_crc) && (nb_retry > 0));
+    Serial.flush();
 }
 
 /** Store a string in flash memory.*/
@@ -1843,9 +1795,6 @@ void process_serial(void)
 void process_recv_gsm(void)
 {
     uint8_t value;
-    uint8_t i;
-    uint8_t crc;
-    uint8_t recv_crc;
     uint8_t recv_size;
     uint8_t recv_index;
     uint8_t error;
@@ -1854,34 +1803,36 @@ void process_recv_gsm(void)
 
     if (g_process_recv_gsm == PROCESS_RECV_GSM_WAIT_COMMAND)
     {
-	/* if we get a valid char, read char */
-	if (Serial.available() > 0)
+	/* if we get 3 byte, which is the minimum value for cmd */
+	if (Serial.available() >= MIN_CMD_SIZE)
 	{
 	    error = 0;
 	    value = Serial.read();
 	    if (value == COMMAND_START)
 	    {
-		/* wait for command */
-		nb_wait = 0;
-		while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
-		{
-		    nb_wait++;
-		}
+		/* read command value */
+		command = Serial.read();
 
-		if (nb_wait == MAX_WAIT_SERIAL)
+		/* read size */
+		recv_size = Serial.read();
+		if (recv_size > 0)
 		{
-		    error = 1;
-		}
-		else
-		{
-		    /* read command value */
-		    command = Serial.read();
+		    recv_index = 0;
 
-		    /* wait for size */
+		    /* Now read all the data */
 		    nb_wait = 0;
-		    while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
+		    while ((recv_index < recv_size) && (nb_wait < MAX_WAIT_SERIAL))
 		    {
-			nb_wait++;
+			if (Serial.available() > 0)
+			{
+			    /* get incoming data: */
+			    g_recv_gsm[recv_index] = Serial.read();
+			    recv_index++;
+			}
+			else
+			{
+			    nb_wait++;
+			}
 		    }
 
 		    if (nb_wait == MAX_WAIT_SERIAL)
@@ -1890,93 +1841,10 @@ void process_recv_gsm(void)
 		    }
 		    else
 		    {
-			/* read size */
-			recv_size = Serial.read();
-			if (recv_size > 0)
+			if (recv_index == recv_size)
 			{
-			    recv_index = 0;
-			    crc   = 0;
-
-			    /* Now read all the data */
-			    nb_wait = 0;
-			    while ((recv_index < recv_size) && (nb_wait < MAX_WAIT_SERIAL))
-			    {
-				if (Serial.available() > 0)
-				{
-				    /* get incoming data: */
-				    g_recv_gsm[recv_index] = Serial.read();
-				    crc += g_recv_gsm[recv_index];
-				    recv_index++;
-				}
-				else
-				{
-				    nb_wait++;
-				}
-			    }
-
-			    if (nb_wait == MAX_WAIT_SERIAL)
-			    {
-				error = 1;
-			    }
-			    else
-			    {
-				if (recv_index == recv_size)
-				{
-				    /* Set null terminated string */
-				    g_recv_gsm[recv_index] = 0;
-
-				    /* crc == 0 is the error code, then do not use it */
-				    if (crc == 0)
-					crc++;
-				}
-				else
-				{
-				    error = 1;
-				}
-			    }
-			}
-			else
-			{
-			    crc = 42;
-			}
-		    }
-
-		    if (error == 0)
-		    {
-			/* wait for CRC */
-			nb_wait = 0;
-			while ((Serial.available() <= 0 ) && (nb_wait < MAX_WAIT_SERIAL))
-			{
-			    nb_wait++;
-			}
-			if (nb_wait == MAX_WAIT_SERIAL)
-			{
-			    error = 1;
-			}
-			else
-			{
-			    /* read CRC */
-			    recv_crc  = Serial.read();
-
-			    /* check CRC */
-			    if (crc == recv_crc)
-			    {
-				/* Send CRC */
-				Serial.write(crc);
-
-				/* then flush serial */
-				Serial.flush();
-
-				/* Set action plan */
-				g_process_action = command;
-
-				/* Disable communication ,wait for message treatment */
-				g_process_recv_gsm = PROCESS_RECV_GSM_DO_NOTHING;
-			    }
-			    else
-			    {
-				error = 1;
-			    }
+			    /* Set null terminated string */
+			    g_recv_gsm[recv_index] = 0;
 			}
 		    }
 		}
@@ -1993,9 +1861,6 @@ void process_recv_gsm(void)
 		{
 		    value = Serial.read();
 		}
-		/* then send CRC error */
-		crc = 0;
-		Serial.write(crc);
 
 		/* then flush serial */
 		Serial.flush();
