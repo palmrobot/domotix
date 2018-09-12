@@ -129,20 +129,15 @@ Master I/O Board                     GSM Board
 Master I/O Board                     GSM Board
     |                                    |
     |                                    |
-    |--START CMD NB_DATA DATA CRC------->|
-    |<----------ACK CRC------------------|
+    |--START CMD NB_DATA DATA ---------->|
     |                                    |
-    |<--FA D1 00 CC ---------------------| Init GSM module OK
-    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |<--FA D1 00 ------------------------| Init GSM module OK
     |                                    |
-    |<--FA D2 00 CC ---------------------| Init GSM module FAILED
-    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |<--FA D2 00 ------------------------| Init GSM module FAILED
     |                                    |
-    |<--FA D3 01 XX CC ------------------| Switch ON/OFF light 1
-    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |<--FA D3 01 XX ---------------------| Switch ON/OFF light 1
     |                                    |
-    |<--FA D4 01 XX CC ------------------| Critical time enable/disable
-    |--------- FB CC-------------------->| Ack with CRC from sent data
+    |<--FA D4 01 XX ---------------------| Critical time enable/disable
     |                                    |
 
 */
@@ -1847,6 +1842,12 @@ void process_recv_gsm(void)
 			{
 			    /* Set null terminated string */
 			    g_recv_gsm[recv_index] = 0;
+
+			    /* Set action plan */
+			    g_process_action = command;
+
+			    /* Disable communication ,wait for message treatment */
+			    g_process_recv_gsm  = PROCESS_RECV_GSM_DO_NOTHING;
 			}
 		    }
 		}
@@ -1863,9 +1864,6 @@ void process_recv_gsm(void)
 		{
 		    value = Serial.read();
 		}
-
-		/* then flush serial */
-		Serial.flush();
 	    }
 	}
     }
