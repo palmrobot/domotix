@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.30"
+#define VERSION				"v5.31"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -3421,12 +3421,12 @@ void process_schedule(void)
 	}
 
 	/* Check negative temperature and send SMS to inform cars class */
-	if (g_hour100 == 700)
+	if (g_hour100 == 745)
 	{
 	    if (g_sched_daymin_sms == 0)
 	    {
 		g_sched_daymin_sms = 1;
-		if (g_temperature_daymin <= 0)
+		if (g_temperature_daymin <= 2)
 		{
 		    send_SMS("Givre probable sur les voitures");
 		}
