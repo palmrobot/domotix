@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.25"
+#define VERSION				"v5.27"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -69,8 +69,8 @@
 #define PIN_TEMP_GRENIER		A10/* o */
 #define PIN_GRENIER_LUMIERE	        A11/* p */
 #define PIN_METEO_GIROUETTE	        A12/* q */
-#define PIN_METEO_ANEMOMETRE	        21 /* r */
-#define PIN_METEO_PLUVIOMETRE	        20 /* s */
+#define PIN_METEO_ANEMOMETRE	        18 /* r */
+#define PIN_METEO_PLUVIOMETRE	        19 /* s */
 /* Pluviometrie nuit */			   /* t */
 /* Max Pluviometrie  */			   /* u */
 /* Max speed day */			   /* , */
@@ -100,8 +100,6 @@
 #define PIN_ETHER_CTRL3			52
 #define PIN_ETHER_SELECT		53
 #define PIN_UNUSED			10
-#define PIN_UNUSED			18
-#define PIN_UNUSED			19
 
 /********************************************************/
 /*      State  GSM definitions                          */
@@ -297,7 +295,7 @@ state_lumiere_s g_grenier_lumiere; /* p */
 #define LAMPE_OFF			1
 #define LAMPE_ON			0
 
-#define THRESHOLD_EDF			210
+#define THRESHOLD_EDF			160
 
 uint16_t g_req_count = 0;
 uint8_t g_debug      = 0;
@@ -926,10 +924,10 @@ void setup(void)
     }
 
     /* Initialisation de l'interruption INT0 (comptage pluviometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, RISING);
 
     /* Initialisation de l'interruption INT1 (comptage anemometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, RISING);
 
 #ifdef DEBUG_MEM
     PgmPrint("Free RAM: ");
