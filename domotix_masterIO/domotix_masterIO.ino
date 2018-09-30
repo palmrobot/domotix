@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.31"
+#define VERSION				"v5.32"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -849,9 +849,9 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
     /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1);
 
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
@@ -860,11 +860,11 @@ void setup(void)
     sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1);
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
