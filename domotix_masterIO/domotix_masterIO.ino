@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.32"
+#define VERSION				"v5.34"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -360,6 +360,7 @@ uint8_t g_pluvio_max_cpt_day = 0;
 uint8_t g_pluvio_max_cpt_mon = 0;
 
 volatile uint16_t g_anemo_cpt = 0;
+uint16_t g_anemo_cpt_1sec = 0;
 uint16_t g_anemo_max_day_cpt = 0;
 uint16_t g_anemo_max_year_cpt = 0;
 uint8_t g_anemo_max_year_cpt_hour = 0;
@@ -1251,9 +1252,16 @@ void deal_with_code(File *file, char item, char type, char code)
 	case 'r':
 	{
 	    if (g_debug)
-		g_client.print(g_anemo_cpt);
+	    {
+		g_client.print(g_anemo_cpt_1sec);
+	    }
 	    else
+	    {
+		sprintf(g_anemo_string,"%d.%d km/h",
+		    (uint16_t)(g_anemo_cpt_1sec * ANEMO_UNIT_SEC),
+		    (uint16_t)((g_anemo_cpt_1sec * ANEMO_10_SEC)%10));
 		g_client.print(g_anemo_string);
+	    }
 	}break;
 	case 's':
 	{
@@ -3165,9 +3173,7 @@ void process_domotix_quick(void)
 	{
 	    g_beginWait1sec = millis();
 
-	    sprintf(g_anemo_string,"%d.%d km/h",
-		(uint16_t)(g_anemo_cpt * ANEMO_UNIT_SEC),
-		(uint16_t)((g_anemo_cpt * ANEMO_10_SEC)%10));
+	    g_anemo_cpt_1sec = g_anemo_cpt;
 
 	    if (g_anemo_cpt > g_anemo_max_day_cpt)
 	    {
