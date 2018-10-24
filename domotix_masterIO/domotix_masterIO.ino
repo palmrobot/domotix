@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.41"
+#define VERSION				"v5.42"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -194,9 +194,7 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 uint8_t g_process_serial;
 #endif /* DEBUG_SERIAL */
 
-#ifdef DEBUG_METEO
 uint32_t g_cpt_milli = 0;
-#endif /* METEO */
 
 uint8_t g_process_ethernet;
 uint8_t g_process_domotix;
@@ -347,7 +345,6 @@ char  g_girouette_string[15]; /* Nord Ouest */
 #define ANEMO_10_SEC		0.24
 #define ANEMO_UNIT_10		24
 #define MIN_WIND_10SEC		10
-#define ANEMO_MOY_MAX		6
 
 #define GIROUETTE_MAX_8		870 /* 930 */
 #define GIROUETTE_MAX_7		770 /* 836 */
@@ -359,19 +356,17 @@ char  g_girouette_string[15]; /* Nord Ouest */
 #define GIROUETTE_MAX_1		50  /* 75 */
 
 volatile uint16_t g_pluvio_cpt = 0;
-volatile uint16_t g_pluvio_cpt_min = 0;
+volatile uint16_t g_pluvio_cpt_glitch = 0;
 volatile uint16_t g_pluvio_night_cpt = 0;
+uint16_t g_pluvio_cpt_print = 0;
 uint16_t g_pluvio_max_cpt = 0;
 uint16_t g_pluvio_max_cpt_day = 0;
 uint16_t g_pluvio_max_cpt_mon = 0;
 
-uint32_t g_anemo_sum = 0;
-volatile uint16_t g_anemo_cpt = 0;
-volatile uint16_t g_anemo_cpt_min = 0;
-uint16_t g_anemo_cpt_10sec = 0;
-uint16_t g_anemo_moy = 0;
-uint16_t g_anemo_max_day_cpt = 0;
-uint16_t g_anemo_max_year_cpt = 0;
+volatile uint32_t g_anemo_cpt = 0;
+uint32_t g_anemo_cpt_10sec = 0;
+uint32_t g_anemo_max_day_cpt = 0;
+uint32_t g_anemo_max_year_cpt = 0;
 uint8_t g_anemo_max_year_cpt_hour = 0;
 uint8_t g_anemo_max_year_cpt_min = 0;
 uint8_t g_anemo_max_year_cpt_day = 0;
@@ -379,7 +374,9 @@ uint8_t g_anemo_max_year_cpt_mon = 0;
 uint8_t g_anemo_sum_idx = 0;
 
 
+volatile uint32_t g_beginWait60sec = 0;
 volatile uint32_t g_beginWait10sec = 0;
+volatile uint32_t g_beginWait1sec = 0;
 volatile uint32_t g_beginWait3msec = 0;
 uint16_t g_girouette = 0;
 uint16_t g_girouette_cpt = 0;
@@ -590,14 +587,13 @@ void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_dela
 void interrupt_pluvio()
 {
     g_pluvio_cpt++;
-    g_pluvio_cpt_min++;
+    g_pluvio_cpt_glitch++;
     g_pluvio_night_cpt++;
 }
 
 void interrupt_anemo()
 {
     g_anemo_cpt++;
-    g_anemo_cpt_min++;
 }
 
 /********************************************************/
@@ -703,22 +699,22 @@ void setup(void)
     g_debug = 0;
     g_NTP   = 0;
     g_start = 0;
+    g_cpt_milli = 0;
 
     g_pluvio_cpt = 0;
-    g_pluvio_cpt_min = 0;
+    g_pluvio_cpt_print = 0;
+    g_pluvio_cpt_glitch = 0;
     g_pluvio_night_cpt = 0;
     g_pluvio_max_cpt = 0;
 
     g_anemo_cpt = 0;
-    g_anemo_cpt_min = 0;
     g_anemo_max_day_cpt = 0;
     g_anemo_max_year_cpt = 0;
-    g_anemo_moy = 0;
-    g_anemo_sum_idx = 0;
-    g_anemo_sum = 0;
 
     g_beginWait10sec = millis();
     g_beginWait3msec = g_beginWait10sec;
+    g_beginWait60sec = g_beginWait10sec;
+    g_beginWait1sec  = g_beginWait10sec;
 
     g_girouette = 0;
     g_girouette_cpt = 0;
@@ -1277,18 +1273,18 @@ void deal_with_code(File *file, char item, char type, char code)
 	    else
 	    {
 		sprintf(g_anemo_string,"%d.%d km/h",
-		    (uint16_t)(g_anemo_moy * ANEMO_10_SEC),
-		    (uint16_t)((g_anemo_moy * ANEMO_UNIT_10)%100));
+		    (uint16_t)(g_anemo_cpt_10sec * ANEMO_10_SEC),
+		    (uint16_t)((g_anemo_cpt_10sec * ANEMO_UNIT_10)%100));
 		g_client.print(g_anemo_string);
 	    }
 	}break;
 	case 's':
 	{
 	    if (g_debug)
-		g_client.print(g_pluvio_cpt);
+		g_client.print(g_pluvio_cpt_print);
 	    else
 	    {
-		sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
+		sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt_print * PLUVIO_UNIT));
 		g_client.print(g_pluvio_string);
 	    }
 	}break;
@@ -1736,14 +1732,6 @@ time_t getNtpTime(void)
 
 	    /* NTP is ok and running */
 	    g_NTP = 1;
-
-	    /* reset interrupt values */
-	    g_pluvio_cpt = 0;
-	    g_pluvio_cpt_min = 0;
-	    g_pluvio_night_cpt = 0;
-
-	    g_anemo_cpt = 0;
-	    g_anemo_cpt_min = 0;
 
 	    g_process_schedule = PROCESS_ON;
 	    g_process_domotix_quick  = PROCESS_ON;
@@ -3194,46 +3182,51 @@ void process_domotix(void)
 void process_domotix_quick(void)
 {
     state_lumiere_s *edf;
+    uint32_t msec = 0;
 
     if (g_process_domotix_quick != PROCESS_OFF)
     {
+	msec = millis();
+
 	/* Meteo every 10 sec */
-	if ((millis() - g_beginWait10sec) >= 10000)
+	if ((msec - g_beginWait10sec) >= 10000)
 	{
-	    g_beginWait10sec  = millis();
+	    g_beginWait10sec  = msec;
 
 	    g_anemo_cpt_10sec = g_anemo_cpt;
 	    g_anemo_cpt       = 0;
-	    g_anemo_cpt_min   = 0;
 
 	    if (g_anemo_cpt_10sec < MIN_WIND_10SEC)
 	    {
 		g_anemo_cpt_10sec = 0;
 	    }
 
-	    if (g_anemo_sum_idx < ANEMO_MOY_MAX)
+	    if (g_anemo_cpt_10sec > g_anemo_max_day_cpt)
 	    {
-		g_anemo_sum += g_anemo_cpt_10sec;
-		g_anemo_sum_idx++;
+		g_anemo_max_day_cpt = g_anemo_cpt_10sec;
+		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
+		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
+		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
 	    }
-	    else
+	}
+
+	if ((msec - g_beginWait60sec) >= 60000)
+	{
+	    g_beginWait60sec  = msec;
+
+	    if (g_pluvio_cpt_glitch <= 2)
 	    {
-		if (g_anemo_sum > (ANEMO_MOY_MAX * MIN_WIND_10SEC))
-		{
-		    g_anemo_moy = (uint16_t)(g_anemo_sum/ANEMO_MOY_MAX);
-
-		    g_anemo_sum       = 0;
-		    g_anemo_sum_idx   = 0;
-
-		    if (g_anemo_moy > g_anemo_max_day_cpt)
-		    {
-			g_anemo_max_day_cpt = g_anemo_moy;
-			sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
-			    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
-			    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
-		    }
-		}
+		/* it's a glitch */
+		g_pluvio_cpt -= g_pluvio_cpt_glitch;
 	    }
+	    g_pluvio_cpt_glitch = 0;
+	    g_pluvio_cpt_print = g_pluvio_cpt;
+	}
+
+	if ((msec - g_beginWait1sec) >= 1000)
+	{
+	    g_beginWait1sec  = msec;
+
 #ifdef DEBUG_METEO
 	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
 	    sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
@@ -3243,25 +3236,14 @@ void process_domotix_quick(void)
 	    Serial.print("g_anemo_cpt  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.println(g_anemo_string);
 	    Serial.print("g_anemo_max_day_cpt = ");Serial.print(g_anemo_max_day_cpt);Serial.print(" / ");
 	    Serial.println(g_anemo_max_day_string);
-	    g_cpt_milli = 0;
+
 #endif
+
+	    g_cpt_milli = 0;
 	}
-#ifdef DEBUG_METEO
 	else
 	{
 	    g_cpt_milli++;
-	}
-#endif
-
-	/* every minute, check if pluvio has count less than 5 time, which is debounce */
-	if (g_sec == 1)
-	{
-	    if (g_pluvio_cpt_min <= 2)
-	    {
-		/* it's a glitch */
-		g_pluvio_cpt -= g_pluvio_cpt_min;
-	    }
-	    g_pluvio_cpt_min = 0;
 	}
 
 	/* heure creuse ? */
@@ -3538,14 +3520,16 @@ void process_schedule(void)
 		g_sched_midnight = 1;
 
 		/* reset meteo values */
-		if (g_pluvio_cpt >= g_pluvio_max_cpt)
+		if (g_pluvio_cpt_print >= g_pluvio_max_cpt)
 		{
-		    g_pluvio_max_cpt = g_pluvio_cpt;
+		    g_pluvio_max_cpt = g_pluvio_cpt_print;
 		    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", (uint16_t)(g_pluvio_max_cpt * PLUVIO_UNIT), g_day, g_mon);
 		    g_pluvio_max_cpt_day = g_day;
 		    g_pluvio_max_cpt_mon = g_mon;
 		}
 		g_pluvio_cpt = 0;
+		g_pluvio_cpt_print = 0;
+		g_pluvio_cpt_glitch = 0;
 
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
