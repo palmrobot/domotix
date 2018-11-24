@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.42"
+#define VERSION				"v5.43"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -217,6 +217,7 @@ uint8_t g_process_recv_gsm;
 
 #define PROCESS_DOMOTIX_TIMEOUT			2000
 #define PROCESS_DOMOTIX_CALC_CPT		50 /* => 50*PROCESS_DOMOTIX_TIMEOUT = 10000 msec = 10sec */
+#define PROCESS_DOMOTIX_CALC_CPT_GIRO		5000 /* => 5000*PROCESS_DOMOTIX_TIMEOUT = 1 000 000 msec = 1 000sec */
 
 /********************************************************/
 /*      Global definitions                              */
@@ -380,7 +381,7 @@ volatile uint32_t g_beginWait1sec = 0;
 volatile uint32_t g_beginWait3msec = 0;
 uint16_t g_girouette = 0;
 uint16_t g_girouette_cpt = 0;
-uint16_t g_girouette_total = 0;
+uint32_t g_girouette_total = 0;
 
 /********************************************************/
 /*      GSM global definitions                          */
@@ -3081,7 +3082,7 @@ void process_domotix(void)
 	value = analogRead(PIN_METEO_GIROUETTE);
 	g_girouette_cpt++;
 	g_girouette_total += value;
-	if (g_girouette_cpt > PROCESS_DOMOTIX_CALC_CPT)
+	if (g_girouette_cpt > PROCESS_DOMOTIX_CALC_CPT_GIRO)
 	{
 	    g_girouette = g_girouette_total / g_girouette_cpt;
 	    g_girouette_total = 0;
