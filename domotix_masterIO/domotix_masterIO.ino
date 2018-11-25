@@ -865,9 +865,9 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
     /* reset values */
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0);
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1);
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1);
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
