@@ -1,0 +1,122 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html >
+<head>
+  <title>Domotix</title>
+	<STYLE type="text/css">
+      <!--
+      .main
+      {
+        margin:auto;
+        width:1000px;
+        height:1000px;
+        background-color:#404652;
+        color:white;
+      }
+      h2
+      {
+        margin-left:120px;
+        text-decoration:none;
+        color:#7AD1FA;
+      }
+      h3
+      {
+        text-align:center;
+        color:grey;
+        margin-top:0px;
+      }
+      h4
+      {
+        text-align:center;
+	color:#D11E1E;
+	margin-top:10px;
+	margin-bottom:10px;
+      }
+      .table_piece
+      {
+        text-align:center;
+        margin:auto;
+        width:1000px;
+        border-collapse:collapse;
+      }
+      .bas
+      {
+        text-align:center;
+        color:#8AADFA;
+        border:0px;
+        height:150px;
+      }
+      .ko
+      {
+        color:#F0C000;
+        text-align:left;
+        width:320px;
+      }
+      .cr
+      {
+        text-align:center;
+        margin-top:10px;
+        height: 80px;
+        width: 500px;
+        background-color:#404652;
+        font-size: 35px;
+        border-radius: 20px;
+        border: solid orange;
+        color: white;
+      }
+      .ok
+      {
+        text-align:left;
+        width:320px;
+      }
+      .po
+      {
+        color:#298A08;
+        font-weight:bold;
+        text-align: left;
+        width:320px;
+      }
+      .vi
+      {
+        text-align:left;
+        width:320px;
+      }
+      -->
+      </style>
+</head>
+<body>
+  <div class="main">
+    <table>
+      <tr>
+        <td>
+          <h2 style="margin-left:0px;text-decoration:none;color:white;text-align:center;">Système de surveillance domotique</br>
+            <a href="index.htm" style="margin-left:0px;text-decoration:none;color:white;text-align:center">DOMOTIX</a></h2>
+          <h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a> <br/><span style="color:#D11E1E;">$w00</span></h3>
+
+          <table class="table_piece">
+            <form method=get action="http://192.168.5.20/">
+              <div style="text-align:center">
+                <button name="cmd" type="submit" class="cr" value="1"><b>Cuisine</b> </button> </br>
+                <button name="cmd" type="submit" class="cr" style="background-color:orange;"value="2"><b>Cellier</b> </button></br>
+                <button name="cmd" type="submit" class="cr" value="3"><b>Entrée</b> </button></br>
+                <button name="cmd" type="submit" class="cr" value="4"><b>Garage droite</b> </button></br>
+                <button name="cmd" type="submit" class="cr" value="5"><b>Garage gauche</b> </button></br>
+              </div>
+            </form>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" class="bas">
+          Domotix $x00: developped by PalmRobot - 2014 - All rights reserved</br>
+          Connexion de l'adresse IP : $a00
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>border-radius: 20px;
+background-color: orange;
+font-size: 40px;
+border-radius: 20px;
+border: solid orange;
+color: white;
