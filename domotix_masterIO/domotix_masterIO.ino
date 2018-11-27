@@ -3474,7 +3474,7 @@ void process_schedule(void)
 	    if (g_sched_daymin_sms == 0)
 	    {
 		g_sched_daymin_sms = 1;
-		if (g_temperature_daymin <= 2)
+		if (g_temperature_daymin <= 0)
 		{
 		    send_SMS("Givre probable sur les voitures");
 		}
