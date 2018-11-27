@@ -24,13 +24,6 @@
         color:grey;
         margin-top:0px;
       }
-      h4
-      {
-        text-align:center;
-	color:#D11E1E;
-	margin-top:10px;
-	margin-bottom:10px;
-      }
       .table_piece
       {
         text-align:center;
@@ -63,23 +56,19 @@
         border: solid orange;
         color: white;
       }
-      .ok
+      .cro
       {
-        text-align:left;
-        width:320px;
+        text-align:center;
+        margin-top:10px;
+        height: 80px;
+        width: 500px;
+        background-color:orange;
+        font-size: 35px;
+        border-radius: 20px;
+        border: solid orange;
+        color: white;
       }
-      .po
-      {
-        color:#298A08;
-        font-weight:bold;
-        text-align: left;
-        width:320px;
-      }
-      .vi
-      {
-        text-align:left;
-        width:320px;
-      }
+
       -->
       </style>
 </head>
@@ -93,13 +82,13 @@
           <h3>$z00 <a href="itemM.htm" style="text-decoration:none;color:grey;">$M00°C</a> <br/><span style="color:#D11E1E;">$w00</span></h3>
 
           <table class="table_piece">
-            <form method=get action="http://192.168.5.20/">
+            <form method="get" action="check.htm">
               <div style="text-align:center">
-                <button name="cmd" type="submit" class="cr" value="1"><b>Cuisine</b> </button> </br>
-                <button name="cmd" type="submit" class="cr" style="background-color:orange;"value="2"><b>Cellier</b> </button></br>
-                <button name="cmd" type="submit" class="cr" value="3"><b>Entrée</b> </button></br>
-                <button name="cmd" type="submit" class="cr" value="4"><b>Garage droite</b> </button></br>
-                <button name="cmd" type="submit" class="cr" value="5"><b>Garage gauche</b> </button></br>
+                <input name="check" type="submit" class="cr" value="Cuisine" /> </br>
+                <input name="check" type="submit" class="cro" value="Cellier" /> </br>
+                <input name="check" type="submit" class="cr" value="Entrée" /> </br>
+                <input name="check" type="submit" class="cro" value="Garage droite" /></br>
+                <input name="check" type="submit" class="cr" value="Garage gauche" /></br>
               </div>
             </form>
           </table>
@@ -114,9 +103,4 @@
     </table>
   </div>
 </body>
-</html>border-radius: 20px;
-background-color: orange;
-font-size: 40px;
-border-radius: 20px;
-border: solid orange;
-color: white;
+</html>
