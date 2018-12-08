@@ -325,9 +325,9 @@ int8_t g_temperature_yearmax_min;
 int8_t g_temperature_yearmax_day;
 int8_t g_temperature_yearmax_mon;
 
-char  g_tempdaymin_string[20]; /* 27°C à 17h32 */
+char  g_tempdaymin_string[20]; /* 27ï¿½C ï¿½ 17h32 */
 char  g_tempdaymax_string[20];
-char  g_tempyearmin_string[30]; /* 27°C à 17h32 le 23/03 */
+char  g_tempyearmin_string[30]; /* 27ï¿½C ï¿½ 17h32 le 23/03 */
 char  g_tempyearmax_string[30];
 int16_t  g_temperature_grenier_cpt = 0;
 int16_t  g_temperature_grenier_total = 0;
@@ -342,7 +342,7 @@ char  g_pluvio_night_string[10]; /* 123mm */
 char  g_pluvio_max_string[30]; /* 123mm le 23/03 */
 char  g_anemo_string[30]; /* 132 km/h */
 char  g_anemo_max_day_string[30]; /* 132 km/h */
-char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
+char  g_anemo_max_year_string[30]; /* 132 km/h ï¿½ 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
 
 uint8_t g_porte_entree_to_check = 0;
@@ -867,14 +867,14 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
     EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
     EEPROM.get(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
-    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
+    sprintf(g_tempyearmin_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
 
     EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
-    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
+    sprintf(g_tempyearmax_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
 
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
@@ -901,732 +901,7 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
-	(uint16_t)(g_anemo_max_year_cpt * ANEMO_10_SEC),
-	(uint16_t)((g_anemo_max_year_cpt * ANEMO_UNIT_10)%100),
-	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon,
-	g_anemo_max_year_cpt_hour, g_anemo_max_year_cpt_min);
-
-
-    sprintf(g_girouette_string,"------");
-    sprintf(g_pluvio_string,"0 mm");
-    sprintf(g_pluvio_night_string,"0 mm");
-    sprintf(g_anemo_string,"0 km/h");
-    sprintf(g_anemo_max_day_string,"0 km/h");
-
-    g_sched_temperature = 0;
-    g_sched_door_already_opened = 0;
-    g_sched_door_already_closed = 0;
-    g_sched_midnight = 0;
-    g_sched_night_start = 0;
-    g_sched_night_end = 0;
-    g_sched_temp_year = 0;
-    g_sched_daymin_sms = 0;
-
-    g_temperature_grenier_cpt = 0;
-    g_temperature_grenier_total = 0;
-    g_temperature_ext_cpt = 0;
-    g_temperature_ext_total = 0;
-    g_temperature_bureau_cpt = 0;
-    g_temperature_bureau_total = 0;
-    g_temperature_garage_cpt = 0;
-    g_temperature_garage_total = 0;
-
-    g_porte_entree_to_check = 0;
-    g_porte_cuisine_to_check = 0;
-    g_porte_cellier_to_check = 0;
-    g_porte_garage_droite_to_check = 0;
-    g_porte_garage_gauche_to_check = 0;
-
-    for(i = 0; i < NB_ITEM; i++ )
-    {
-	g_data_item[i].item = 0;
-	g_data_item[i].date[0] = 0;
-	g_data_item[i].hour[0] = 0;
-	g_data_item[i].state[0] = 0;
-	g_data_item[i].clas[0] = 0;
-    }
-
-    for(i = 0; i < NB_DELAY_MAX; i++)
-    {
-	g_delay[i].delay_inuse  = 0;
-    }
-
-    /* Initialisation de l'interruption INT0 (comptage pluviometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_PLUVIOMETRE), interrupt_pluvio, FALLING);
-
-    /* Initialisation de l'interruption INT1 (comptage anemometre) */
-    attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, RISING);
-
-#ifdef DEBUG_MEM
-    PgmPrint("Free RAM: ");
-    Serial.println(FreeRam());
-
-    PgmPrintln("EEPROM :");
-    for(i=0;i<40;i++)
-    {
-	EEPROM.get(i, hour);
-
-	sprintf(eeprom_str,"%02d:%02d", i, hour);
-	Serial.println(eeprom_str);
-    }
-#endif
-
-#ifdef DEBUG_SERIAL
-    PgmPrintln("Init OK");
-#endif
-}
-
-void save_eeprom()
-{
-    EEPROM.put(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
-    EEPROM.put(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
-    EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
-
-    EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
-    EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
-    EEPROM.put(EEPROM_ADDR_WEEK, g_week);
-
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_pluvio_max_cpt_mon);
-
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-
-    EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_HOU, g_temperature_yearmin_hour);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
-    EEPROM.put(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
-
-    EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
-    EEPROM.put(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
-}
-
-void send_gsm(uint8_t cmd, uint8_t *buffer, uint8_t size)
-{
-    if (size > CMD_DATA_MAX)
-	size = CMD_DATA_MAX;
-
-    /* Send byte of Start of transmission */
-    Serial.write(COMMAND_START);
-
-    /* Send byte of Command  */
-    Serial.write(cmd);
-
-    /* Send byte of Size of data */
-    Serial.write(size);
-
-    /* Write Data */
-    if ((buffer != NULL) && (size > 0))
-    {
-	Serial.write(buffer, size);
-    }
-    Serial.flush();
-}
-
-/** Store a string in flash memory.*/
-#define send_SMS(x) send_SMS_P(PSTR(x), 0)
-#define send_SMS_alerte(x) send_SMS_P(PSTR(x), 1)
-
-void send_SMS_P(PGM_P str, uint8_t alerte)
-{
-    uint8_t i;
-    uint8_t len;
-
-    if (g_init_gsm == 0)
-  	return;
-
-    if ((alerte == 1) && (g_critical_alertes == 0))
-	return;
-
-    len = strlen_P(str);
-    if (len > 0)
-    {
-	if (len > CMD_DATA_MAX)
-	    len = CMD_DATA_MAX-1;
-
-	strncpy_P((char *)g_send_to_gsm, str, len);
-
-	send_gsm(IO_GSM_COMMAND_SMS, g_send_to_gsm, len);
-    }
-}
-
-/********************************************************/
-/*      Web                                             */
-/********************************************************/
-void deal_with_file(char item, char type, char code)
-{
-    data_item_t  *ptr_item;
-
-    g_full_list_name[0] = '\0';
-    sprintf(g_full_list_name, "%c.TXT", item);
-
-    /* open file */
-    read_item_in_file(item, g_full_list_name);
-
-    switch (type)
-    {
-	case '1':
-	{
-	    ptr_item = &g_data_item[0];
-	}break;
-	case '2':
-	{
-	    ptr_item = &g_data_item[1];
-	}break;
-	case '3':
-	{
-	    ptr_item = &g_data_item[2];
-	}break;
-	case '4':
-	{
-	    ptr_item = &g_data_item[3];
-	}break;
-	case '5':
-	{
-	    ptr_item = &g_data_item[4];
-	}break;
-	case '6':
-	{
-	    ptr_item = &g_data_item[5];
-	}break;
-	case '7':
-	{
-	    ptr_item = &g_data_item[6];
-	}break;
-
-	default:
-
-	break;
-    }
-
-    switch (code)
-    {
-	case '0':
-	{
-	    g_client.write((uint8_t*)ptr_item->date,strlen(ptr_item->date));
-	}break;
-	case '1':
-	{
-	    g_client.write((uint8_t*)ptr_item->hour,strlen(ptr_item->hour));
-	}break;
-	case '2':
-	{
-	    g_client.write((uint8_t*)ptr_item->state,strlen(ptr_item->state));
-	}break;
-	case '3':
-	{
-	    g_client.write((uint8_t*)ptr_item->clas,strlen(ptr_item->clas));
-	}break;
-	default:
-	break;
-    }
-}
-
-void deal_with_code(File *file, char item, char type, char code)
-{
-    code_t *ptr_code;
-    char ipaddr[16];
-    char id;
-
-    switch (code)
-    {
-	case WEB_CODE_PORTE:
-	{
-	    ptr_code = &g_code[TYPE_PORTE];
-	}break;
-	case WEB_CODE_LUMIERE:
-	{
-	    ptr_code = &g_code[TYPE_LUMIERE];
-	}break;
-	case WEB_CODE_CLASS:
-	{
-	    ptr_code = &g_code[TYPE_CLASS];
-	}break;
-	case WEB_CODE_VOLET:
-	{
-	    ptr_code = &g_code[TYPE_VOLET];
-	}break;
-	case WEB_CODE_CLASS_POULE:
-	{
-	    ptr_code = &g_code[TYPE_CLASS_POULE];
-	}break;
-	case WEB_CODE_POULE:
-	{
-	    ptr_code = &g_code[TYPE_POULE];
-	}break;
-	case WEB_CODE_CHECKED:
-	{
-	    ptr_code = &g_code[TYPE_CHECKED];
-	}break;
-	case WEB_CODE_CRITICAL:
-	{
-	    ptr_code = &g_code[TYPE_CRITICAL];
-	}break;
-	case WEB_CODE_NOTCHECKED:
-	{
-	    ptr_code = &g_code[TYPE_NOTCHECKED];
-	}break;
-	case WEB_CODE_CLASS_CHECK	'A'
-
-
-#define TYPE_PORTE		0
-#define TYPE_LUMIERE		1
-#define TYPE_CLASS		2
-#define TYPE_VOLET		3
-#define TYPE_CLASS_POULE	4
-#define TYPE_POULE		5
-#define TYPE_CHECKED		6
-#define TYPE_CRITICAL		7
-#define TYPE_NOTCHECKED		8
-#define TYPE_CLASS_CHECK	9
-
-
-code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
-		    {"Allumee", "Eteinte"}, /* TYPE_LUMIERE */
-		    {"ko", "ok"}, /* TYPE_CLASS */
-		    {"Ouvert", "Ferme"}, /* TYPE_VOLET */
-		    {"vi", "po"}, /* TYPE_CLASS_POULE */
-		    {"Vide", "Poule"}, /* TYPE_POULE */
-		    {"checked", ""}, /* TYPE_CHECKED */
-		    {"cr", "ok"}, /* TYPE_CRITIQUE */
-		    {"", "checked"}, /* TYPE_NOTCHECKED */
-		    {"cr", "cro"}}; /* TYPE_CLASS_CHECK */
-
-/*
- * 12/12/14
- * 09:35:42
- * F
- * ok
- */
-typedef struct
-{
-    char item;
-    char date[12];
-    char hour[12];
-    char state[8];
-    char clas[4];
-}data_item_t;
-
-#define NB_ITEM				7
-data_item_t g_data_item[NB_ITEM];
-
-#define SEPARATE_ITEM			'#'
-
-#define STATE_SEPARATION		1
-#define STATE_DATE			2
-#define STATE_HOUR			3
-#define STATE_STATE			4
-#define STATE_CLASS			5
-
-/*                              0  , 0  , jan, jan,  fev, fev, mar, mar, avr, avr, mai, mai, jun, jun, jul, jul, aou, aou, sep, sep, oct, oct, nov, nov, dec, dec  */
-uint16_t g_time_to_open[26]  = {0  , 0  , 720, 705,  650, 635, 620, 600, 645, 620, 600, 545, 530, 530, 545, 600, 630, 600, 645, 700, 720, 735, 650, 705, 720, 735};
-
-/*                              0  , 0  , jan , jan , fev , fev , mar , mar , avr , avr , mai , mai , jun , jun , jul , jul , aou , aou , sep , sep , oct , oct , nov , nov , dec , dec  */
-uint16_t g_time_to_close[26] = {0  , 0  , 1800, 1820, 1840, 1900, 1930, 1955, 2110, 2130, 2145, 2200, 2215, 2230, 2205, 2150, 2140, 2120, 1955, 1930, 1900, 1840, 1820, 1800, 1800, 1800};
-
-#define WEB_GET			1
-#define WEB_EOL			2
-#define WEB_END			4
-#define WEB_ERROR		16
-
-uint8_t g_page_web   = 0;
-time_t g_prevDisplay = 0;
-file_web_t g_filename;
-char  g_clock[9];
-char  g_date[9];
-char  g_start_date[20];
-uint8_t g_init_gsm = 0;
-
-/********************************************************/
-/*      Delay & Timers			                */
-/********************************************************/
-
-typedef void (*callback_delay) (void);
-
-typedef struct
-{
-    uint32_t delay_start;
-    uint32_t delay_wait;
-    callback_delay cb;
-    uint8_t  delay_inuse;
-    uint8_t  *process;
-}delay_t;
-
-#define NB_DELAY_MAX			10
-delay_t g_delay[NB_DELAY_MAX];
-
-typedef struct
-{
-    uint8_t  id;
-    uint32_t timeout;
-}event_t;
-
-event_t g_evt_buzz_before5min_on;
-event_t g_evt_buzz_before5min_off;
-event_t g_evt_cellier_porte_ext_open;
-event_t g_evt_process_domotix;
-
-/********************************************************/
-/*      NTP			                        */
-/********************************************************/
-
-#define TIMEZONE			2
-#define LOCAL_PORT_NTP			8888
-#define NTP_PACKET_SIZE			48
-#define TIME_SYNCHRO_SEC		200
-
-/* server Free */
-char g_timeServer[] = "ntp.midway.ovh";
-EthernetUDP g_Udp;
-uint32_t g_beginWait;
-time_t prevDisplay = 0;
-
-/*  NTP time is in the first 48 bytes of message*/
-byte g_packetBuffer[NTP_PACKET_SIZE];
-uint8_t g_NTP = 0;
-uint8_t g_timezone = 1;
-
-/* date & time */
-uint8_t g_week = 0;
-uint8_t g_hour = 0;
-uint8_t g_min  = 0;
-uint16_t g_hour100 = 0;
-uint8_t g_sec  = 0;
-uint8_t g_day  = 0;
-uint8_t g_mon  = 0;
-uint16_t g_year = 0;
-char *g_tab_week[8] = {"Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"};
-
-/* EDF */
-uint32_t g_edf_week_hc = 0;
-uint32_t g_edf_week_hp = 0;
-
-/********************************************************/
-/*      FUNCTION		                        */
-/********************************************************/
-void wait_some_time( uint8_t *process, unsigned long time_to_wait, callback_delay call_after_delay);
-
-/********************************************************/
-/*      CONSTANT STRING		                        */
-/********************************************************/
-
-
-/********************************************************/
-/*      Interrupt		                        */
-/********************************************************/
-
-void interrupt_pluvio()
-{
-    g_pluvio_cpt++;
-    g_pluvio_cpt_glitch++;
-    g_pluvio_night_cpt++;
-}
-
-void interrupt_anemo()
-{
-    g_anemo_cpt++;
-}
-
-/********************************************************/
-/*      Init			                        */
-/********************************************************/
-void setup(void)
-{
-    uint8_t i;
-    int16_t value;
-    int16_t value_offset;
-    int16_t temp;
-    uint16_t pluvio;
-#ifdef DEBUG_MEM
-    char eeprom_str[20];
-    uint8_t hour;
-#endif
-
-    /* Init Input Ports */
-    pinMode(PIN_METEO_PLUVIOMETRE, INPUT);
-    pinMode(PIN_METEO_ANEMOMETRE, INPUT);
-    pinMode(PIN_GARAGE_DROITE, INPUT);
-    pinMode(PIN_GARAGE_GAUCHE, INPUT);
-    pinMode(PIN_GARAGE_FENETRE, INPUT);
-    pinMode(PIN_CELLIER_PORTE_EXT, INPUT);
-    pinMode(PIN_CELLIER_PORTE_INT, INPUT);
-    pinMode(PIN_LINGERIE_CUISINE, INPUT);
-    pinMode(PIN_GARAGE_FOND, INPUT);
-    pinMode(PIN_CUISINE_EXT, INPUT);
-    pinMode(PIN_LINGERIE_FENETRE, INPUT);
-    pinMode(PIN_ENTREE_PORTE_EXT, INPUT);
-    pinMode(PIN_POULAILLER_PORTE, INPUT);
-    pinMode(PIN_POULE_GAUCHE, INPUT);
-    pinMode(PIN_POULE_DROITE, INPUT);
-    pinMode(PIN_POULAILLER_HALL, INPUT);
-    pinMode(PIN_BUREAU_PORTE, INPUT);
-    pinMode(PIN_BUREAU_FENETRE, INPUT);
-    pinMode(PIN_GSM, INPUT);
-
-    /* Init Output Ports */
-    pinMode(PIN_OUT_EDF, OUTPUT);
-    pinMode(PIN_OUT_LAMPE_1, OUTPUT);
-    pinMode(PIN_OUT_LAMPE_2, OUTPUT);
-    pinMode(PIN_OUT_LAMPE_3, OUTPUT);
-    pinMode(PIN_OUT_LAMPE_4, OUTPUT);
-    pinMode(PIN_OUT_GSM_INIT, OUTPUT);
-    pinMode(PIN_OUT_POULAILLER_ACTION, OUTPUT);
-    pinMode(PIN_OUT_BUZZER, OUTPUT);
-
-    g_lampe1 = LAMPE_OFF;
-    g_lampe2 = LAMPE_OFF;
-    g_lampe3 = LAMPE_OFF;
-    g_lampe4 = LAMPE_OFF;
-
-    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
-    digitalWrite(PIN_OUT_LAMPE_1, g_lampe1);
-    digitalWrite(PIN_OUT_LAMPE_2, g_lampe2);
-    digitalWrite(PIN_OUT_LAMPE_3, g_lampe3);
-    digitalWrite(PIN_OUT_LAMPE_4, g_lampe4);
-    digitalWrite(PIN_OUT_GSM_INIT, LIGHT_OFF);
-    digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
-    analogWrite(PIN_OUT_BUZZER, 0);
-
-    /* init Process */
-#ifdef DEBUG_SERIAL
-    g_process_serial   = PROCESS_ON;
-#endif
-
-    g_process_ethernet = PROCESS_ON;
-    g_process_domotix  = PROCESS_ON;
-    g_process_domotix_quick  = PROCESS_OFF;
-    g_process_time     = PROCESS_OFF;
-    g_process_delay    = PROCESS_ON;
-    g_process_schedule = PROCESS_OFF;
-    g_process_action   = PROCESS_ACTION_NONE;
-    g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
-
-#ifdef DEBUG_SERIAL
-    /* initialize serial communications at 115200 bps */
-    Serial.begin(115200);
-    delay(100);
-#endif
-
-    /* initialize the serial communications with GSM Board */
-    Serial.begin(115200);
-    delay(100);
-
-    /* start the Ethernet connection and the server: */
-    Ethernet.begin(g_mac_addr, g_ip_addr);
-    g_server.begin();
-    delay(100);
-
-    /* Init SDCard */
-    SD.begin(CS_PIN_SDCARD);
-    delay(100);
-
-    /* init UDP for NTP */
-    g_Udp.begin(LOCAL_PORT_NTP);
-    setSyncInterval(TIME_SYNCHRO_SEC);
-    setSyncProvider(getNtpTime);
-    delay(100);
-
-    /* Init global var */
-    g_debug = 0;
-    g_NTP   = 0;
-    g_start = 0;
-    g_cpt_milli = 0;
-
-    g_pluvio_cpt = 0;
-    g_pluvio_cpt_print = 0;
-    g_pluvio_cpt_glitch = 0;
-    g_pluvio_night_cpt = 0;
-    g_pluvio_max_cpt = 0;
-
-    g_anemo_cpt = 0;
-    g_anemo_max_day_cpt = 0;
-    g_anemo_max_year_cpt = 0;
-
-    g_beginWait10sec = millis();
-    g_beginWait3msec = g_beginWait10sec;
-    g_beginWait60sec = g_beginWait10sec;
-    g_beginWait1sec  = g_beginWait10sec;
-
-    g_girouette = 0;
-    g_girouette_cpt = 0;
-    g_girouette_total = 0;
-
-    g_date[0] = 0;
-    g_clock[0] = 0;
-    g_start_date[0] = 0;
-
-    g_init_gsm = 2;
-    g_critical_alertes = 0;
-
-    EEPROM.get(EEPROM_ADDR_TIMEZONE, g_timezone);
-    if ((g_timezone != 1) && (g_timezone != 2))
-    {
-	g_timezone = 2;
-	EEPROM.put(EEPROM_ADDR_TIMEZONE, g_timezone);
-    }
-
-    /* init pipes */
-    g_recv_gsm[0]	= 0;
-
-    /* Init global var for web code */
-    g_garage_droite.old = 2;
-    g_garage_droite.id = -1;
-
-    g_garage_gauche.old = 2;
-    g_garage_gauche.id = -1;
-
-    g_garage_fenetre.old = 2;
-    g_garage_fenetre.id = -1;
-
-    g_garage_lumiere_etabli.old = 2000;
-    g_garage_lumiere_etabli.state_old = 2;
-    g_garage_lumiere_etabli.id = -1;
-
-    g_garage_lumiere.old = 2000;
-    g_garage_lumiere.state_old = 2;
-    g_garage_lumiere.id = -1;
-
-    g_garage_porte.old = 2;
-    g_garage_porte.id = -1;
-
-    g_bureau_porte.old = 2;
-    g_bureau_porte.id = -1;
-
-    g_bureau_fenetre.old = 2;
-    g_bureau_fenetre.id = -1;
-
-    g_cellier_porte_ext.old = 2;
-    g_cellier_porte_ext.id = -1;
-
-    g_cellier_porte.old = 2;
-    g_cellier_porte.id = -1;
-
-    g_cellier_lumiere.old = 2000;
-    g_cellier_lumiere.state_old = 2;
-    g_cellier_lumiere.id = -1;
-
-    g_bureau_lumiere.old = 2000;
-    g_bureau_lumiere.state_old = 2;
-    g_bureau_lumiere.id = -1;
-
-    g_lingerie_lumiere.old = 2000;
-    g_lingerie_lumiere.state_old = 2;
-    g_lingerie_lumiere.id = -1;
-
-    g_lingerie_porte_cuisine.old = 2;
-    g_lingerie_porte_cuisine.id = -1;
-
-    g_lingerie_fenetre.old = 2;
-    g_lingerie_fenetre.id = -1;
-
-    g_entree_porte_ext.old = 2;
-    g_entree_porte_ext.id = -1;
-
-    g_cuisine_porte_ext.old = 2;
-    g_cuisine_porte_ext.id = -1;
-
-    g_poulailler_porte.old = 2;
-    g_poulailler_porte.id = -1;
-
-    g_poulailler.old = 2;
-    g_poulailler.id = -1;
-
-    g_poule_gauche.old = 2;
-    g_poule_gauche.id = -1;
-
-    g_poule_droite.old = 2;
-    g_poule_droite.id = -1;
-
-    g_temperature_garage = 0;
-    g_temperature_bureau = 0;
-    g_temperature_grenier = 0;
-
-    g_grenier_lumiere.old = 2000;
-    g_grenier_lumiere.state_old = 2;
-    g_grenier_lumiere.id = -1;
-
-    g_edf_hc.old = 999999;
-    g_edf_hc.id = -1;
-    EEPROM.get(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
-
-    g_edf_hp.old = 999999;
-    g_edf_hp.id = -1;
-    EEPROM.get(EEPROM_ADDR_EDF_HP, g_edf_hp.value);
-
-    EEPROM.get(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
-    EEPROM.get(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
-
-    /* Init analog parts */
-    value = analogRead(PIN_TEMP_EXT);
-    value_offset = analogRead(PIN_TEMP_EXT_OFFSET);
-    g_temperature_ext = ((500.0 * (value - value_offset)) / 1024) - OFFSET_TEMP_EXT;
-
-    value = analogRead(PIN_TEMP_GARAGE);
-    g_temperature_garage = (500.0 * value) / 1024;
-
-    value = analogRead(PIN_TEMP_BUREAU);
-    g_temperature_bureau  = ((500.0 * value) / 1024) + OFFSET_TEMP_BUREAU;
-
-    value = analogRead(PIN_TEMP_GRENIER);
-    g_temperature_grenier  = ((500.0 * value) / 1024) + OFFSET_TEMP_GRENIER;
-
-    g_temperature_daymin = g_temperature_ext;
-    g_temperature_daymax = g_temperature_ext;
-
-    /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_MINYEAR, g_temperature_yearmin); */
-    /* EEPROM.put(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax); */
-
-
-    EEPROM.get(EEPROM_ADDR_MINYEAR, g_temperature_yearmin);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_HOU, g_temperature_yearmin_hour);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
-    EEPROM.get(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
-    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
-
-    EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
-    EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
-    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
-
-    EEPROM.get(EEPROM_ADDR_WEEK, g_week);
-
-    /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
-
-    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
-    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
-    EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, g_pluvio_max_cpt_mon);
-    pluvio = g_pluvio_max_cpt * PLUVIO_UNIT;
-    sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
-
-    /* reset values */
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1);
-
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
-    EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
+    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d ï¿½ %02dh%02d",
 	(uint16_t)(g_anemo_max_year_cpt * ANEMO_10_SEC),
 	(uint16_t)((g_anemo_max_year_cpt * ANEMO_UNIT_10)%100),
 	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon,
@@ -3954,21 +3229,21 @@ void process_domotix(void)
 	if (g_temperature_ext <= g_temperature_daymin)
 	{
 	    g_temperature_daymin = g_temperature_ext;
-	    sprintf(g_tempdaymin_string,"%d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
+	    sprintf(g_tempdaymin_string,"%dï¿½C ï¿½ %02dh%02d",g_temperature_daymin ,g_hour, g_min);
 	}
 
 	if (g_temperature_ext >= g_temperature_daymax)
 	{
 	    g_temperature_daymax = g_temperature_ext;
-	    sprintf(g_tempdaymax_string,"%d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
+	    sprintf(g_tempdaymax_string,"%dï¿½C ï¿½ %02dh%02d",g_temperature_daymax ,g_hour, g_min);
 	}
 
 	if (g_temperature_ext <= g_temperature_yearmin)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
-	    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
+	    sprintf(g_tempyearmin_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
 
-	    /* save values for eeprom write à midnight */
+	    /* save values for eeprom write ï¿½ midnight */
 	    g_temperature_yearmin_hour = g_hour;
 	    g_temperature_yearmin_min = g_min;
 	    g_temperature_yearmin_day = g_day;
@@ -3978,9 +3253,9 @@ void process_domotix(void)
 	if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
-	    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
+	    sprintf(g_tempyearmax_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
 
-	    /* save values for eeprom write à midnight */
+	    /* save values for eeprom write ï¿½ midnight */
 	    g_temperature_yearmax_hour = g_hour;
 	    g_temperature_yearmax_min = g_min;
 	    g_temperature_yearmax_day = g_day;
@@ -4019,9 +3294,19 @@ void process_domotix_quick(void)
 	    if (g_anemo_cpt_10sec > g_anemo_max_day_cpt)
 	    {
 		g_anemo_max_day_cpt = g_anemo_cpt_10sec;
-		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
+		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d ï¿½ %02dh%02d",
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
 		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
+
+		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
+		{
+		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
+		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_year_string);
+		    g_anemo_max_year_cpt_hour = g_hour;
+		    g_anemo_max_year_cpt_min = g_min;
+		    g_anemo_max_year_cpt_day = g_day;
+		    g_anemo_max_year_cpt_mon = g_mon;
+		}
 	    }
 	}
 
@@ -4346,17 +3631,6 @@ void process_schedule(void)
 		g_pluvio_cpt_print = 0;
 		g_pluvio_cpt_glitch = 0;
 
-		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
-		{
-		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
-			(uint16_t)(g_anemo_max_year_cpt * ANEMO_10_SEC),
-			(uint16_t)((g_anemo_max_year_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
-		    g_anemo_max_year_cpt_hour = g_hour;
-		    g_anemo_max_year_cpt_min = g_min;
-		    g_anemo_max_year_cpt_day = g_day;
-		    g_anemo_max_year_cpt_mon = g_mon;
-		}
 		g_anemo_max_day_cpt = 0;
 
 		/* reset temperatures counters*/
@@ -4565,3 +3839,4 @@ void loop(void)
     process_delay();
     process_do_it();
 }
+
