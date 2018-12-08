@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.50"
+#define VERSION				"v5.51"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -325,9 +325,9 @@ int8_t g_temperature_yearmax_min;
 int8_t g_temperature_yearmax_day;
 int8_t g_temperature_yearmax_mon;
 
-char  g_tempdaymin_string[20]; /* 27ï¿½C ï¿½ 17h32 */
+char  g_tempdaymin_string[20]; /* 27°C à 17h32 */
 char  g_tempdaymax_string[20];
-char  g_tempyearmin_string[30]; /* 27ï¿½C ï¿½ 17h32 le 23/03 */
+char  g_tempyearmin_string[30]; /* 27°C à 17h32 le 23/03 */
 char  g_tempyearmax_string[30];
 int16_t  g_temperature_grenier_cpt = 0;
 int16_t  g_temperature_grenier_total = 0;
@@ -342,7 +342,7 @@ char  g_pluvio_night_string[10]; /* 123mm */
 char  g_pluvio_max_string[30]; /* 123mm le 23/03 */
 char  g_anemo_string[30]; /* 132 km/h */
 char  g_anemo_max_day_string[30]; /* 132 km/h */
-char  g_anemo_max_year_string[30]; /* 132 km/h ï¿½ 17h32 le 23/03*/
+char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
 
 uint8_t g_porte_entree_to_check = 0;
@@ -474,7 +474,7 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"checked", ""}, /* TYPE_CHECKED */
 		    {"cr", "ok"}, /* TYPE_CRITIQUE */
 		    {"", "checked"}, /* TYPE_NOTCHECKED */
-		    {"cr", "cro"}}; /* TYPE_CLASS_CHECK */
+		    {"ok", "ch"}}; /* TYPE_CLASS_CHECK */
 
 /*
  * 12/12/14
@@ -867,14 +867,14 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_MINYEAR_MIN, g_temperature_yearmin_min);
     EEPROM.get(EEPROM_ADDR_MINYEAR_DAY, g_temperature_yearmin_day);
     EEPROM.get(EEPROM_ADDR_MINYEAR_MON, g_temperature_yearmin_mon);
-    sprintf(g_tempyearmin_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
+    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d ",g_temperature_yearmin, g_temperature_yearmin_day, g_temperature_yearmin_mon, g_temperature_yearmin_hour, g_temperature_yearmin_min);
 
     EEPROM.get(EEPROM_ADDR_MAXYEAR, g_temperature_yearmax);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_HOU, g_temperature_yearmax_hour);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MIN, g_temperature_yearmax_min);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_DAY, g_temperature_yearmax_day);
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
-    sprintf(g_tempyearmax_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
+    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
 
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
@@ -901,7 +901,7 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, g_anemo_max_year_cpt_min);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, g_anemo_max_year_cpt_day);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_MON, g_anemo_max_year_cpt_mon);
-    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d ï¿½ %02dh%02d",
+    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 	(uint16_t)(g_anemo_max_year_cpt * ANEMO_10_SEC),
 	(uint16_t)((g_anemo_max_year_cpt * ANEMO_UNIT_10)%100),
 	g_anemo_max_year_cpt_day, g_anemo_max_year_cpt_mon,
@@ -2048,7 +2048,7 @@ void process_ethernet(void)
 			    else if (strstr(g_line,"=Cellier") != NULL)
 			    {
 				if (g_porte_cellier_to_check == 1)
-				    g_porte_cuisine_to_check = 0;
+				    g_porte_cellier_to_check = 0;
 			    }
 			    else if (strstr(g_line,"=Entr") != NULL)
 			    {
@@ -3229,21 +3229,21 @@ void process_domotix(void)
 	if (g_temperature_ext <= g_temperature_daymin)
 	{
 	    g_temperature_daymin = g_temperature_ext;
-	    sprintf(g_tempdaymin_string,"%dï¿½C ï¿½ %02dh%02d",g_temperature_daymin ,g_hour, g_min);
+	    sprintf(g_tempdaymin_string,"%d°C à %02dh%02d",g_temperature_daymin ,g_hour, g_min);
 	}
 
 	if (g_temperature_ext >= g_temperature_daymax)
 	{
 	    g_temperature_daymax = g_temperature_ext;
-	    sprintf(g_tempdaymax_string,"%dï¿½C ï¿½ %02dh%02d",g_temperature_daymax ,g_hour, g_min);
+	    sprintf(g_tempdaymax_string,"%d°C à %02dh%02d",g_temperature_daymax ,g_hour, g_min);
 	}
 
 	if (g_temperature_ext <= g_temperature_yearmin)
 	{
 	    g_temperature_yearmin = g_temperature_ext;
-	    sprintf(g_tempyearmin_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
+	    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
 
-	    /* save values for eeprom write ï¿½ midnight */
+	    /* save values for eeprom write midnight */
 	    g_temperature_yearmin_hour = g_hour;
 	    g_temperature_yearmin_min = g_min;
 	    g_temperature_yearmin_day = g_day;
@@ -3253,9 +3253,9 @@ void process_domotix(void)
 	if (g_temperature_ext >= g_temperature_yearmax)
 	{
 	    g_temperature_yearmax = g_temperature_ext;
-	    sprintf(g_tempyearmax_string,"%dï¿½C le %02d/%02d ï¿½ %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
+	    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
 
-	    /* save values for eeprom write ï¿½ midnight */
+	    /* save values for eeprom write midnight */
 	    g_temperature_yearmax_hour = g_hour;
 	    g_temperature_yearmax_min = g_min;
 	    g_temperature_yearmax_day = g_day;
@@ -3294,7 +3294,7 @@ void process_domotix_quick(void)
 	    if (g_anemo_cpt_10sec > g_anemo_max_day_cpt)
 	    {
 		g_anemo_max_day_cpt = g_anemo_cpt_10sec;
-		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d ï¿½ %02dh%02d",
+		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
 		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
 
