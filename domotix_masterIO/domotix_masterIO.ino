@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.51"
+#define VERSION				"v5.52"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -85,6 +85,11 @@
 /* Check Entree */			   /* 3 */
 /* Check Garage droite */		   /* 4 */
 /* Check Garage gauche */		   /* 5 */
+/* HourCheck cuisine  */		   /* 6 */
+/* HourCheck Cellierr */		   /* 7 */
+/* HourCheck Entree */			   /* 8 */
+/* HourCheck Garage droite */		   /* 9 */
+/* HourCheck Garage gauche */		   /* 0 */
 
 #define PIN_GSM				26
 #define PIN_EDF         		A8
@@ -344,6 +349,11 @@ char  g_anemo_string[30]; /* 132 km/h */
 char  g_anemo_max_day_string[30]; /* 132 km/h */
 char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
+char  g_checkhour_cuisine[8]; /* à 17h32 */
+char  g_checkhour_cellier[8]; /* à 17h32 */
+char  g_checkhour_entree[8]; /* à 17h32 */
+char  g_checkhour_garage_dr[8]; /* à 17h32 */
+char  g_checkhour_garage_ga[8]; /* à 17h32 */
 
 uint8_t g_porte_entree_to_check = 0;
 uint8_t g_porte_cuisine_to_check = 0;
@@ -384,7 +394,6 @@ uint8_t g_anemo_max_year_cpt_min = 0;
 uint8_t g_anemo_max_year_cpt_day = 0;
 uint8_t g_anemo_max_year_cpt_mon = 0;
 uint8_t g_anemo_sum_idx = 0;
-
 
 volatile uint32_t g_beginWait60sec = 0;
 volatile uint32_t g_beginWait10sec = 0;
@@ -1315,19 +1324,19 @@ void deal_with_code(File *file, char item, char type, char code)
 	}break;
 	case 't':
 	{
-		g_client.print(g_pluvio_night_string);
+	    g_client.print(g_pluvio_night_string);
 	}break;
 	case 'u':
 	{
-		g_client.print(g_pluvio_max_string);
+	    g_client.print(g_pluvio_max_string);
 	}break;
 	case ',':
 	{
-		g_client.print(g_anemo_max_day_string);
+	    g_client.print(g_anemo_max_day_string);
 	}break;
 	case '-':
 	{
-		g_client.print(g_anemo_max_year_string);
+	    g_client.print(g_anemo_max_year_string);
 	}break;
 	case 'v':
 	{
@@ -1593,6 +1602,41 @@ void deal_with_code(File *file, char item, char type, char code)
 	    /*  */
 	    g_client.write((uint8_t*)ptr_code->name[g_porte_garage_gauche_to_check],
 		strlen(ptr_code->name[g_porte_garage_gauche_to_check]));
+	}break;
+	case '6':
+	{
+	    if (g_porte_cuisine_to_check == 1)
+	    {
+		g_client.print(g_checkhour_cuisine);
+	    }
+	}break;
+	case '7':
+	{
+	    if (g_porte_cellier_to_check == 1)
+	    {
+		g_client.print(g_checkhour_cellier);
+	    }
+	}break;
+	case '8':
+	{
+	    if (g_porte_entree_to_check == 1)
+	    {
+		g_client.print(g_checkhour_entree);
+	    }
+	}break;
+	case '9':
+	{
+	    if (g_porte_garage_droite_to_check == 1)
+	    {
+		g_client.print(g_checkhour_garage_dr);
+	    }
+	}break;
+	case '0':
+	{
+	    if (g_porte_garage_gauche_to_check == 1)
+	    {
+		g_client.print(g_checkhour_garage_ga);
+	    }
 	}break;
 	default:
 
@@ -2684,6 +2728,7 @@ void process_domotix(void)
 	    {
 		send_SMS_alerte("La porte de droite du garage vient de se fermer");
 		g_porte_garage_droite_to_check = 1;
+		sprintf(g_checkhour_garage_dr,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2705,6 +2750,7 @@ void process_domotix(void)
 	    {
 		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
 		g_porte_garage_gauche_to_check = 1;
+		sprintf(g_checkhour_garage_ga,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2758,6 +2804,7 @@ void process_domotix(void)
 		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
 		g_porte_cellier_to_check = 1;
+		sprintf(g_checkhour_cellier,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2836,6 +2883,7 @@ void process_domotix(void)
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de se fermer");
 		g_porte_cuisine_to_check = 1;
+		sprintf(g_checkhour_cuisine,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2914,6 +2962,7 @@ void process_domotix(void)
 	    {
 		send_SMS_alerte("La porte d'entree vient de se fermer");
 		g_porte_entree_to_check = 1;
+		sprintf(g_checkhour_entree,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -3301,7 +3350,7 @@ void process_domotix_quick(void)
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_year_string);
+		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_day_string);
 		    g_anemo_max_year_cpt_hour = g_hour;
 		    g_anemo_max_year_cpt_min = g_min;
 		    g_anemo_max_year_cpt_day = g_day;
@@ -3568,12 +3617,12 @@ void process_schedule(void)
 	}
 
 	/* Check negative temperature and send SMS to inform cars class */
-	if (g_hour100 == 745)
+	if ((g_hour100 == 745) && ((g_week >= 1) && (g_week <= 5 )))
 	{
 	    if (g_sched_daymin_sms == 0)
 	    {
 		g_sched_daymin_sms = 1;
-		if (g_temperature_daymin <= 2)
+		if (g_temperature_daymin <= 0)
 		{
 		    send_SMS("Givre probable sur les voitures");
 		}
