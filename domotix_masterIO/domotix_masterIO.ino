@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.53"
+#define VERSION				"v5.52"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -368,11 +368,6 @@ uint8_t g_porte_garage_gauche_to_check = 0;
 #define ANEMO_UNIT_10		24
 #define MIN_WIND_10SEC		10
 
-#define ANEMO_3_SEC		0.8
-#define ANEMO_UNIT_3		8
-#define MIN_WIND_3SEC		10
-
-
 #define GIROUETTE_MAX_8		870 /* 930 */
 #define GIROUETTE_MAX_7		770 /* 836 */
 #define GIROUETTE_MAX_6		620 /* 732 */
@@ -392,7 +387,6 @@ uint16_t g_pluvio_max_cpt_mon = 0;
 
 volatile uint32_t g_anemo_cpt = 0;
 uint32_t g_anemo_cpt_10sec = 0;
-uint32_t g_anemo_cpt_3sec = 0;
 uint32_t g_anemo_max_day_cpt = 0;
 uint32_t g_anemo_max_year_cpt = 0;
 uint8_t g_anemo_max_year_cpt_hour = 0;
@@ -405,7 +399,6 @@ volatile uint32_t g_beginWait60sec = 0;
 volatile uint32_t g_beginWait10sec = 0;
 volatile uint32_t g_beginWait1sec = 0;
 volatile uint32_t g_beginWait3msec = 0;
-volatile uint32_t g_beginWait3sec = 0;
 uint16_t g_girouette = 0;
 uint16_t g_girouette_cpt = 0;
 uint32_t g_girouette_total = 0;
@@ -746,7 +739,6 @@ void setup(void)
     g_beginWait3msec = g_beginWait10sec;
     g_beginWait60sec = g_beginWait10sec;
     g_beginWait1sec  = g_beginWait10sec;
-    g_beginWait3sec  = g_beginWait10sec;
 
     g_girouette = 0;
     g_girouette_cpt = 0;
@@ -1310,13 +1302,13 @@ void deal_with_code(File *file, char item, char type, char code)
 	{
 	    if (g_debug)
 	    {
-		g_client.print(g_anemo_cpt_3sec);
+		g_client.print(g_anemo_cpt_10sec);
 	    }
 	    else
 	    {
 		sprintf(g_anemo_string,"%d.%d km/h",
-		    (uint16_t)(g_anemo_cpt_3sec * ANEMO_3_SEC),
-		    (uint16_t)((g_anemo_cpt_3sec * ANEMO_UNIT_3)%100));
+		    (uint16_t)(g_anemo_cpt_10sec * ANEMO_10_SEC),
+		    (uint16_t)((g_anemo_cpt_10sec * ANEMO_UNIT_10)%100));
 		g_client.print(g_anemo_string);
 	    }
 	}break;
@@ -3335,25 +3327,25 @@ void process_domotix_quick(void)
     {
 	msec = millis();
 
-	/* Meteo every 3 sec */
-	if ((msec - g_beginWait3sec) >= 3000)
+	/* Meteo every 10 sec */
+	if ((msec - g_beginWait10sec) >= 10000)
 	{
-	    g_beginWait3sec  = msec;
+	    g_beginWait10sec  = msec;
 
-	    g_anemo_cpt_3sec = g_anemo_cpt;
+	    g_anemo_cpt_10sec = g_anemo_cpt;
 	    g_anemo_cpt       = 0;
 
-	    if (g_anemo_cpt_3sec < MIN_WIND_3SEC)
+	    if (g_anemo_cpt_10sec < MIN_WIND_10SEC)
 	    {
-		g_anemo_cpt_3sec = 0;
+		g_anemo_cpt_10sec = 0;
 	    }
 
-	    if (g_anemo_cpt_3sec > g_anemo_max_day_cpt)
+	    if (g_anemo_cpt_10sec > g_anemo_max_day_cpt)
 	    {
-		g_anemo_max_day_cpt = g_anemo_cpt_3sec;
+		g_anemo_max_day_cpt = g_anemo_cpt_10sec;
 		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
-		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_3_SEC),
-		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_3)%100), g_day, g_mon, g_hour, g_min);
+		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
+		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
 
 		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
 		{
