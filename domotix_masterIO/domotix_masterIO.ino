@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.43"
+#define VERSION				"v5.52"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -80,6 +80,16 @@
 /* Domotix version */			   /* x */
 /* Debug part */			   /* y */
 /* Date & hour */			   /* z */
+/* Check cuisine  */			   /* 1 */
+/* Check Cellierr */			   /* 2 */
+/* Check Entree */			   /* 3 */
+/* Check Garage droite */		   /* 4 */
+/* Check Garage gauche */		   /* 5 */
+/* HourCheck cuisine  */		   /* 6 */
+/* HourCheck Cellierr */		   /* 7 */
+/* HourCheck Entree */			   /* 8 */
+/* HourCheck Garage droite */		   /* 9 */
+/* HourCheck Garage gauche */		   /* 0 */
 
 #define PIN_GSM				26
 #define PIN_EDF         		A8
@@ -339,6 +349,17 @@ char  g_anemo_string[30]; /* 132 km/h */
 char  g_anemo_max_day_string[30]; /* 132 km/h */
 char  g_anemo_max_year_string[30]; /* 132 km/h à 17h32 le 23/03*/
 char  g_girouette_string[15]; /* Nord Ouest */
+char  g_checkhour_cuisine[8]; /* à 17h32 */
+char  g_checkhour_cellier[8]; /* à 17h32 */
+char  g_checkhour_entree[8]; /* à 17h32 */
+char  g_checkhour_garage_dr[8]; /* à 17h32 */
+char  g_checkhour_garage_ga[8]; /* à 17h32 */
+
+uint8_t g_porte_entree_to_check = 0;
+uint8_t g_porte_cuisine_to_check = 0;
+uint8_t g_porte_cellier_to_check = 0;
+uint8_t g_porte_garage_droite_to_check = 0;
+uint8_t g_porte_garage_gauche_to_check = 0;
 
 #define PLUVIO_UNIT		0.2794
 #define PLUVIO_UNIT_1000	2794
@@ -373,7 +394,6 @@ uint8_t g_anemo_max_year_cpt_min = 0;
 uint8_t g_anemo_max_year_cpt_day = 0;
 uint8_t g_anemo_max_year_cpt_mon = 0;
 uint8_t g_anemo_sum_idx = 0;
-
 
 volatile uint32_t g_beginWait60sec = 0;
 volatile uint32_t g_beginWait10sec = 0;
@@ -439,6 +459,7 @@ typedef struct
 #define WEB_CODE_CHECKED	'7'
 #define WEB_CODE_CRITICAL	'8'
 #define WEB_CODE_NOTCHECKED	'9'
+#define WEB_CODE_CLASS_CHECK	'A'
 
 
 #define TYPE_PORTE		0
@@ -450,6 +471,7 @@ typedef struct
 #define TYPE_CHECKED		6
 #define TYPE_CRITICAL		7
 #define TYPE_NOTCHECKED		8
+#define TYPE_CLASS_CHECK	9
 
 
 code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
@@ -460,7 +482,8 @@ code_t g_code[] = { {"Ouverte", "Fermee"},  /* TYPE_PORTE*/
 		    {"Vide", "Poule"}, /* TYPE_POULE */
 		    {"checked", ""}, /* TYPE_CHECKED */
 		    {"cr", "ok"}, /* TYPE_CRITIQUE */
-		    {"", "checked"}}; /* TYPE_NOTCHECKED */
+		    {"", "checked"}, /* TYPE_NOTCHECKED */
+		    {"ok", "ch"}}; /* TYPE_CLASS_CHECK */
 
 /*
  * 12/12/14
@@ -918,6 +941,12 @@ void setup(void)
     g_temperature_garage_cpt = 0;
     g_temperature_garage_total = 0;
 
+    g_porte_entree_to_check = 0;
+    g_porte_cuisine_to_check = 0;
+    g_porte_cellier_to_check = 0;
+    g_porte_garage_droite_to_check = 0;
+    g_porte_garage_gauche_to_check = 0;
+
     for(i = 0; i < NB_ITEM; i++ )
     {
 	g_data_item[i].item = 0;
@@ -1155,6 +1184,10 @@ void deal_with_code(File *file, char item, char type, char code)
 	{
 	    ptr_code = &g_code[TYPE_NOTCHECKED];
 	}break;
+	case WEB_CODE_CLASS_CHECK:
+	{
+	    ptr_code = &g_code[TYPE_CLASS_CHECK];
+	}break;
 	default:
 	{
 	    ptr_code = &g_code[0];
@@ -1291,19 +1324,19 @@ void deal_with_code(File *file, char item, char type, char code)
 	}break;
 	case 't':
 	{
-		g_client.print(g_pluvio_night_string);
+	    g_client.print(g_pluvio_night_string);
 	}break;
 	case 'u':
 	{
-		g_client.print(g_pluvio_max_string);
+	    g_client.print(g_pluvio_max_string);
 	}break;
 	case ',':
 	{
-		g_client.print(g_anemo_max_day_string);
+	    g_client.print(g_anemo_max_day_string);
 	}break;
 	case '-':
 	{
-		g_client.print(g_anemo_max_year_string);
+	    g_client.print(g_anemo_max_year_string);
 	}break;
 	case 'v':
 	{
@@ -1539,6 +1572,71 @@ void deal_with_code(File *file, char item, char type, char code)
 	    /* fenetre bureau */
 	    g_client.write((uint8_t*)ptr_code->name[g_bureau_fenetre.curr],
 		strlen(ptr_code->name[g_bureau_fenetre.curr]));
+	}break;
+	case '1':
+	{
+	    /* g_porte_cuisine_to_check */
+	    g_client.write((uint8_t*)ptr_code->name[g_porte_cuisine_to_check],
+		strlen(ptr_code->name[g_porte_cuisine_to_check]));
+	}break;
+	case '2':
+	{
+	    /* g_porte_cellier_to_check */
+	    g_client.write((uint8_t*)ptr_code->name[g_porte_cellier_to_check],
+		strlen(ptr_code->name[g_porte_cellier_to_check]));
+	}break;
+	case '3':
+	{
+	    /* g_porte_entree_to_check */
+	    g_client.write((uint8_t*)ptr_code->name[g_porte_entree_to_check],
+		strlen(ptr_code->name[g_porte_entree_to_check]));
+	}break;
+	case '4':
+	{
+	    /*  */
+	    g_client.write((uint8_t*)ptr_code->name[g_porte_garage_droite_to_check],
+		strlen(ptr_code->name[g_porte_garage_droite_to_check]));
+	}break;
+	case '5':
+	{
+	    /*  */
+	    g_client.write((uint8_t*)ptr_code->name[g_porte_garage_gauche_to_check],
+		strlen(ptr_code->name[g_porte_garage_gauche_to_check]));
+	}break;
+	case '6':
+	{
+	    if (g_porte_cuisine_to_check == 1)
+	    {
+		g_client.print(g_checkhour_cuisine);
+	    }
+	}break;
+	case '7':
+	{
+	    if (g_porte_cellier_to_check == 1)
+	    {
+		g_client.print(g_checkhour_cellier);
+	    }
+	}break;
+	case '8':
+	{
+	    if (g_porte_entree_to_check == 1)
+	    {
+		g_client.print(g_checkhour_entree);
+	    }
+	}break;
+	case '9':
+	{
+	    if (g_porte_garage_droite_to_check == 1)
+	    {
+		g_client.print(g_checkhour_garage_dr);
+	    }
+	}break;
+	case '0':
+	{
+	    if (g_porte_garage_gauche_to_check == 1)
+	    {
+		g_client.print(g_checkhour_garage_ga);
+	    }
 	}break;
 	default:
 
@@ -1984,6 +2082,34 @@ void process_ethernet(void)
 		    {
 			/* GET /config.htm?week=jeu HTTP/1.1 */
 			/* Check if it's a request for */
+			if (strstr(g_line,"?check") != NULL)
+			{
+			    if (strstr(g_line,"=Cuisine") != NULL)
+			    {
+				if (g_porte_cuisine_to_check == 1)
+				    g_porte_cuisine_to_check = 0;
+			    }
+			    else if (strstr(g_line,"=Cellier") != NULL)
+			    {
+				if (g_porte_cellier_to_check == 1)
+				    g_porte_cellier_to_check = 0;
+			    }
+			    else if (strstr(g_line,"=Entr") != NULL)
+			    {
+				if (g_porte_entree_to_check == 1)
+				    g_porte_entree_to_check = 0;
+			    }
+			    else if (strstr(g_line,"droite") != NULL)
+			    {
+				if (g_porte_garage_droite_to_check == 1)
+				    g_porte_garage_droite_to_check = 0;
+			    }
+			    else if (strstr(g_line,"gauche") != NULL)
+			    {
+				if (g_porte_garage_gauche_to_check == 1)
+				    g_porte_garage_gauche_to_check = 0;
+			    }
+			}
 			if (strstr(g_line,"?week") != NULL)
 			{
 			    /* check for parameters */
@@ -2152,7 +2278,7 @@ void process_ethernet(void)
 			}
 			else
 			{
-			    g_client.println(F("fermer"));
+			    g_client.println(F("fermee"));
 			}
 		    }
 		    else
@@ -2601,6 +2727,8 @@ void process_domotix(void)
 	    else
 	    {
 		send_SMS_alerte("La porte de droite du garage vient de se fermer");
+		g_porte_garage_droite_to_check = 1;
+		sprintf(g_checkhour_garage_dr,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2621,6 +2749,8 @@ void process_domotix(void)
 	    else
 	    {
 		send_SMS_alerte("La porte de gauche du garage vient de se fermer");
+		g_porte_garage_gauche_to_check = 1;
+		sprintf(g_checkhour_garage_ga,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2673,6 +2803,8 @@ void process_domotix(void)
 		event_del(&g_evt_buzz_before5min_on);
 		analogWrite(PIN_OUT_BUZZER, 0);
 		send_SMS_alerte("La porte exterieure du cellier vient de se fermer");
+		g_porte_cellier_to_check = 1;
+		sprintf(g_checkhour_cellier,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2750,6 +2882,8 @@ void process_domotix(void)
 	    {
 		/* Send SMS */
 		send_SMS_alerte("La porte exterieure de la cuisine vient de se fermer");
+		g_porte_cuisine_to_check = 1;
+		sprintf(g_checkhour_cuisine,"à %02dh%02d", g_hour, g_min);
 	    }
 	}
 
@@ -2825,7 +2959,11 @@ void process_domotix(void)
 		}
 	    }
 	    else
+	    {
 		send_SMS_alerte("La porte d'entree vient de se fermer");
+		g_porte_entree_to_check = 1;
+		sprintf(g_checkhour_entree,"à %02dh%02d", g_hour, g_min);
+	    }
 	}
 
 	g_poulailler_porte.curr = digitalRead(PIN_POULAILLER_PORTE);
@@ -3154,7 +3292,7 @@ void process_domotix(void)
 	    g_temperature_yearmin = g_temperature_ext;
 	    sprintf(g_tempyearmin_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmin, g_day, g_mon, g_hour, g_min);
 
-	    /* save values for eeprom write à midnight */
+	    /* save values for eeprom write midnight */
 	    g_temperature_yearmin_hour = g_hour;
 	    g_temperature_yearmin_min = g_min;
 	    g_temperature_yearmin_day = g_day;
@@ -3166,7 +3304,7 @@ void process_domotix(void)
 	    g_temperature_yearmax = g_temperature_ext;
 	    sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d", g_temperature_yearmax, g_day, g_mon ,g_hour, g_min);
 
-	    /* save values for eeprom write à midnight */
+	    /* save values for eeprom write midnight */
 	    g_temperature_yearmax_hour = g_hour;
 	    g_temperature_yearmax_min = g_min;
 	    g_temperature_yearmax_day = g_day;
@@ -3208,6 +3346,16 @@ void process_domotix_quick(void)
 		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
 		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
+
+		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
+		{
+		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
+		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_day_string);
+		    g_anemo_max_year_cpt_hour = g_hour;
+		    g_anemo_max_year_cpt_min = g_min;
+		    g_anemo_max_year_cpt_day = g_day;
+		    g_anemo_max_year_cpt_mon = g_mon;
+		}
 	    }
 	}
 
@@ -3469,7 +3617,7 @@ void process_schedule(void)
 	}
 
 	/* Check negative temperature and send SMS to inform cars class */
-	if (g_hour100 == 745)
+	if ((g_hour100 == 745) && ((g_week >= 1) && (g_week <= 5 )))
 	{
 	    if (g_sched_daymin_sms == 0)
 	    {
@@ -3532,17 +3680,6 @@ void process_schedule(void)
 		g_pluvio_cpt_print = 0;
 		g_pluvio_cpt_glitch = 0;
 
-		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
-		{
-		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
-			(uint16_t)(g_anemo_max_year_cpt * ANEMO_10_SEC),
-			(uint16_t)((g_anemo_max_year_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
-		    g_anemo_max_year_cpt_hour = g_hour;
-		    g_anemo_max_year_cpt_min = g_min;
-		    g_anemo_max_year_cpt_day = g_day;
-		    g_anemo_max_year_cpt_mon = g_mon;
-		}
 		g_anemo_max_day_cpt = 0;
 
 		/* reset temperatures counters*/
@@ -3751,3 +3888,4 @@ void loop(void)
     process_delay();
     process_do_it();
 }
+
