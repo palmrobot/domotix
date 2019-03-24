@@ -19,7 +19,7 @@
 /* #define DEBUG_NTP*/
 /* #define DEBUG_METEO */
 
-#define VERSION				"v5.52"
+#define VERSION				"v5.53"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -899,11 +899,11 @@ void setup(void)
     sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1);
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
@@ -3322,18 +3322,29 @@ void process_domotix_quick(void)
 {
     state_lumiere_s *edf;
     uint32_t msec = 0;
+    uint32_t msec_diff = 0;
+    uint32_t g_anemo_cpt_local;
 
     if (g_process_domotix_quick != PROCESS_OFF)
     {
 	msec = millis();
+	msec_diff = msec - g_beginWait10sec;
 
 	/* Meteo every 10 sec */
-	if ((msec - g_beginWait10sec) >= 10000)
+	if ( msec_diff >= 10000)
 	{
+	    g_anemo_cpt_local = g_anemo_cpt;
+	    g_anemo_cpt = 0;
 	    g_beginWait10sec  = msec;
 
-	    g_anemo_cpt_10sec = g_anemo_cpt;
-	    g_anemo_cpt       = 0;
+	    if (msec_diff > 10010)
+	    {
+		g_anemo_cpt_10sec = (g_anemo_cpt_local / msec_diff) * 10000;
+	    }
+	    else
+	    {
+		g_anemo_cpt_10sec = g_anemo_cpt_local;
+	    }
 
 	    if (g_anemo_cpt_10sec < MIN_WIND_10SEC)
 	    {
@@ -3387,7 +3398,6 @@ void process_domotix_quick(void)
 	    Serial.println(g_anemo_max_day_string);
 
 #endif
-
 	    g_cpt_milli = 0;
 	}
 	else
@@ -3406,9 +3416,10 @@ void process_domotix_quick(void)
 	    edf = &g_edf_hp;
 	}
 
-	if ((millis() - g_beginWait3msec) >= 2)
+	/* every 2 msec check pin EDF */
+	if ((msec - g_beginWait3msec) >= 2)
 	{
-	    g_beginWait3msec = millis();
+	    g_beginWait3msec = msec;
 	    edf->curr = analogRead(PIN_EDF);
 
 #ifdef DEBUG_EDF
