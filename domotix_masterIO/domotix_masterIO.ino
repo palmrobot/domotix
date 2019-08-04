@@ -7,19 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-/* #define DEBUG_SERIAL */
-/* #define DEBUG_TEMP */
-/* #define DEBUG_EVT */
-/* #define DEBUG_EDF */
-/* #define DEBUG_HTML */
-/* #define DEBUG_SENSOR */
-/* #define DEBUG_ITEM */
-/* #define DEBUG_SMS*/
-/* #define DEBUG_MEM */
-/* #define DEBUG_NTP*/
-/* #define DEBUG_METEO */
-
-#define VERSION				"v5.53"
+#define VERSION				"v5.54"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -100,6 +88,8 @@
 #define PIN_OUT_LAMPE_2			38
 #define PIN_OUT_LAMPE_3			41
 #define PIN_OUT_LAMPE_4			40
+
+#define PIN_SERIAL_DEBUG		xx
 
 #define PIN_SS_ETH_CONTROLLER 		50
 
@@ -200,9 +190,7 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 #define PROCESS_OFF			0
 #define PROCESS_ON			1
 
-#ifdef DEBUG_SERIAL
 uint8_t g_process_serial;
-#endif /* DEBUG_SERIAL */
 
 uint32_t g_cpt_milli = 0;
 
@@ -298,9 +286,10 @@ state_lumiere_s g_grenier_lumiere; /* p */
 
 #define THRESHOLD_EDF			180
 
-uint16_t g_req_count = 0;
-uint8_t g_debug      = 0;
-uint8_t g_start	     = 0;
+uint16_t g_req_count	= 0;
+uint8_t g_debug		= 0;
+uint8_t g_start		= 0;
+uint8_t g_serial_debug	= 0;
 
 uint8_t g_sched_temperature = 0;
 uint8_t g_sched_door_already_opened = 0;
@@ -630,10 +619,8 @@ void setup(void)
     int16_t value_offset;
     int16_t temp;
     uint16_t pluvio;
-#ifdef DEBUG_MEM
     char eeprom_str[20];
     uint8_t hour;
-#endif
 
     /* Init Input Ports */
     pinMode(PIN_METEO_PLUVIOMETRE, INPUT);
@@ -655,6 +642,7 @@ void setup(void)
     pinMode(PIN_BUREAU_PORTE, INPUT);
     pinMode(PIN_BUREAU_FENETRE, INPUT);
     pinMode(PIN_GSM, INPUT);
+    pinMode(PIN_SERIAL_DEBUG, INPUT);
 
     /* Init Output Ports */
     pinMode(PIN_OUT_EDF, OUTPUT);
@@ -680,11 +668,14 @@ void setup(void)
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
     analogWrite(PIN_OUT_BUZZER, 0);
 
-    /* init Process */
-#ifdef DEBUG_SERIAL
-    g_process_serial   = PROCESS_ON;
-#endif
+    g_serial_debug = digitalRead(PIN_SERIAL_DEBUG);
 
+    /* init Process */
+    g_process_serial   = PROCESS_OFF;
+    if (g_serial_debug)
+    {
+	g_process_serial   = PROCESS_ON;
+    }
     g_process_ethernet = PROCESS_ON;
     g_process_domotix  = PROCESS_ON;
     g_process_domotix_quick  = PROCESS_OFF;
@@ -694,13 +685,8 @@ void setup(void)
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
 
-#ifdef DEBUG_SERIAL
-    /* initialize serial communications at 115200 bps */
-    Serial.begin(115200);
-    delay(100);
-#endif
-
     /* initialize the serial communications with GSM Board */
+    /* This serial is also used for debugging */
     Serial.begin(115200);
     delay(100);
 
@@ -888,9 +874,9 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
     /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
-    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1);
+    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1);
 
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
@@ -899,11 +885,11 @@ void setup(void)
     sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1); */
-    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1);
+    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1);
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
@@ -967,23 +953,13 @@ void setup(void)
     /* Initialisation de l'interruption INT1 (comptage anemometre) */
     attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, RISING);
 
-#ifdef DEBUG_MEM
-    PgmPrint("Free RAM: ");
-    Serial.println(FreeRam());
-
-    PgmPrintln("EEPROM :");
-    for(i=0;i<40;i++)
+    if (g_serial_debug)
     {
-	EEPROM.get(i, hour);
+	PgmPrint("Free RAM: ");
+	Serial.println(FreeRam());
 
-	sprintf(eeprom_str,"%02d:%02d", i, hour);
-	Serial.println(eeprom_str);
+	PgmPrintln("Init OK");
     }
-#endif
-
-#ifdef DEBUG_SERIAL
-    PgmPrintln("Init OK");
-#endif
 }
 
 void save_eeprom()
@@ -1776,7 +1752,6 @@ void send_file_full_list(char *file, uint8_t nb_item)
 /*      NTP functions                                   */
 /********************************************************/
 
-#ifdef DEBUG_SERIAL
 void digitalClockDisplaySerial(void)
 {
     /* save current date and clock in global var */
@@ -1789,7 +1764,6 @@ void digitalClockDisplaySerial(void)
     Serial.print(g_date);
     Serial.println();
 }
-#endif
 
 void digitalClock(void)
 {
@@ -1809,9 +1783,10 @@ time_t getNtpTime(void)
     /* discard any previously received packets */
     while (g_Udp.parsePacket() > 0);
 
-#ifdef DEBUG_NTP
-    Serial.println("Transmit NTP");
-#endif
+    if (g_serial_debug)
+    {
+	Serial.println("Transmit NTP");
+    }
 
     sendNTPpacket(g_timeServer);
 
@@ -1823,9 +1798,10 @@ time_t getNtpTime(void)
 	if (size >= NTP_PACKET_SIZE)
 	{
 
-#ifdef DEBUG_NTP
-	    Serial.println("Receive NTP");
-#endif
+	    if (g_serial_debug)
+	    {
+		Serial.println("Receive NTP");
+	    }
 
 	    g_Udp.read(g_packetBuffer, NTP_PACKET_SIZE);
 
@@ -1844,9 +1820,10 @@ time_t getNtpTime(void)
 	    return secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR;
 	}
     }
-#ifdef DEBUG_NTP
-    Serial.println("No NTP :-(");
-#endif
+    if (g_serial_debug)
+    {
+	Serial.println("No NTP :-(");
+    }
     return 0;
 }
 
@@ -1882,7 +1859,6 @@ void sendNTPpacket(char *address)
 /*      Process                                         */
 /********************************************************/
 
-#ifdef DEBUG_SERIAL
 void process_serial(void)
 {
     uint16_t count;
@@ -1908,8 +1884,6 @@ void process_serial(void)
 	}
     }
 }
-#endif
-
 
 void process_recv_gsm(void)
 {
@@ -2007,9 +1981,10 @@ void process_ethernet(void)
 	g_client = g_server.available();
 	if (g_client)
 	{
-#ifdef DEBUG_HTML
-	    PgmPrintln("New Connection");
-#endif
+	    if (g_serial_debug)
+	    {
+		PgmPrintln("New Connection");
+	    }
 	    g_page_web  = 0;
 	    g_req_count = 0;
 	    exit = 0;
@@ -2021,17 +1996,19 @@ void process_ethernet(void)
 		if (g_client.available())
 		{
 		    g_line[g_req_count] = g_client.read();
-#ifdef DEBUG_HTML
-		    Serial.print(g_line[g_req_count]);
-#endif
+		    if (g_serial_debug)
+		    {
+			Serial.print(g_line[g_req_count]);
+		    }
 
 		    /* Search for end of line */
 		    if ((g_line[g_req_count] == '\r') ||
 			(g_line[g_req_count] == '\n'))
 		    {
-#ifdef DEBUG_HTML
-			PgmPrintln("");
-#endif
+			if (g_serial_debug)
+			{
+			    PgmPrintln("");
+			}
 			/* Got a complete line */
 			/* Set '\0' to the end of buffer for string treatment */
 			g_line[g_req_count] = '\0';
@@ -2257,9 +2234,10 @@ void process_ethernet(void)
 			    {
 				strcpy(g_filename.name, &g_line[5]);
 
-#ifdef DEBUG_HTML
-				PgmPrint("found file: ");Serial.println(g_filename.name);
-#endif
+				if (g_serial_debug)
+				{
+				    PgmPrint("found file: ");Serial.println(g_filename.name);
+				}
 				g_filename.fd = SD.open(g_filename.name, FILE_READ);
 			    }
 			}
@@ -2364,9 +2342,10 @@ void process_ethernet(void)
 	    /* close connection */
 	    g_client.stop();
 
-#ifdef DEBUG_HTML
-	    PgmPrintln("Connection Closed");
-#endif
+	    if (g_serial_debug)
+	    {
+		PgmPrintln("Connection Closed");
+	    }
 	}
     }
 }
@@ -2391,9 +2370,10 @@ void read_item_in_file(char item_value, char *file)
      * ok
      */
 
-#ifdef DEBUG_ITEM
-    PgmPrint("File: ");Serial.println(file);
-#endif
+    if (g_serial_debug == 2)
+    {
+	PgmPrint("File: ");Serial.println(file);
+    }
 
     if (g_data_item[0].item == item_value)
     {
@@ -2414,26 +2394,28 @@ void read_item_in_file(char item_value, char *file)
 	g_data_item[0].item = item_value;
     }
 
-
-#ifdef DEBUG_ITEM
-    PgmPrintln("Continue");
-#endif
+    if (g_serial_debug == 2)
+    {
+	PgmPrintln("Continue");
+    }
 
     fd = SD.open(file, FILE_READ);
     if (fd == 0)
     {
 
-#ifdef DEBUG_ITEM
-	PgmPrintln("File not found");
-#endif
+	if (g_serial_debug == 2)
+	{
+	    PgmPrintln("File not found");
+	}
 	return;
     }
 
     file_size = fd.size();
 
-#ifdef DEBUG_ITEM
-    PgmPrint("File size = ");Serial.print(file_size);PgmPrintln(" Bytes");
-#endif
+    if (g_serial_debug == 2)
+    {
+	PgmPrint("File size = ");Serial.print(file_size);PgmPrintln(" Bytes");
+    }
 
     if (file_size == 0)
     {
@@ -2458,9 +2440,10 @@ void read_item_in_file(char item_value, char *file)
 
     fd.close();
 
-#ifdef DEBUG_ITEM
-    PgmPrintln("search for the last 7 item");
-#endif
+    if (g_serial_debug == 2)
+    {
+	PgmPrintln("search for the last 7 item");
+    }
 
     /* search for the last 7 items */
     nb_item = 0;
@@ -2473,9 +2456,10 @@ void read_item_in_file(char item_value, char *file)
 	index--;
     }
 
-#ifdef DEBUG_ITEM
-    PgmPrint("Found ");Serial.print(nb_item);PgmPrintln(" items");
-#endif
+    if (g_serial_debug == 2)
+    {
+	PgmPrint("Found ");Serial.print(nb_item);PgmPrintln(" items");
+    }
 
     /* Save items to struct */
     state = STATE_SEPARATION;
@@ -2572,20 +2556,21 @@ void read_item_in_file(char item_value, char *file)
     }
 
 
-#ifdef DEBUG_ITEM
-    PgmPrint("Nb item = ");Serial.println(item);
-
-
-    for(j=0;j<item ;j++ )
+    if (g_serial_debug == 2)
     {
+	PgmPrint("Nb item = ");Serial.println(item);
 
-	PgmPrint("nb item = ");Serial.print(j+1);Serial.print("/");Serial.println(item);
-	PgmPrint("date    = ");Serial.println(g_data_item[j].date);
-	PgmPrint("hour    = ");Serial.println(g_data_item[j].hour);
-	PgmPrint("state   = ");Serial.println(g_data_item[j].state);
-	PgmPrint("class   = ");Serial.println(g_data_item[j].clas);
+
+	for(j=0;j<item ;j++ )
+	{
+
+	    PgmPrint("nb item = ");Serial.print(j+1);Serial.print("/");Serial.println(item);
+	    PgmPrint("date    = ");Serial.println(g_data_item[j].date);
+	    PgmPrint("hour    = ");Serial.println(g_data_item[j].hour);
+	    PgmPrint("state   = ");Serial.println(g_data_item[j].state);
+	    PgmPrint("class   = ");Serial.println(g_data_item[j].clas);
+	}
     }
-#endif
 
 }
 
@@ -3265,16 +3250,6 @@ void process_domotix(void)
 	    }
 	}
 
-#ifdef DEBUG_TEMP
-	Serial.println(g_clock);
-	Serial.print("garage = ");
-	Serial.print(g_temperature_garage);
-	Serial.print("grenier = ");
-	Serial.print(g_temperature_grenier);
-	Serial.print(" ext = ");
-	Serial.println(g_temperature_ext);
-#endif
-
 	if (g_temperature_ext <= g_temperature_daymin)
 	{
 	    g_temperature_daymin = g_temperature_ext;
@@ -3387,17 +3362,24 @@ void process_domotix_quick(void)
 	{
 	    g_beginWait1sec  = msec;
 
-#ifdef DEBUG_METEO
-	    Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
-	    sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
-	    Serial.print("g_pluvio_cpt = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.println(g_pluvio_string);
-	    Serial.print("g_pluvio_night_cpt = ");Serial.print(g_pluvio_night_cpt);Serial.print(" / ");
-	    Serial.println(g_pluvio_night_string);
-	    Serial.print("g_anemo_cpt  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.println(g_anemo_string);
-	    Serial.print("g_anemo_max_day_cpt = ");Serial.print(g_anemo_max_day_cpt);Serial.print(" / ");
-	    Serial.println(g_anemo_max_day_string);
+	    if (g_serial_debug)
+	    {
+		Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
+	    }
 
-#endif
+	    if (g_serial_debug == 3)
+	    {
+		Serial.println("");
+		sprintf(g_pluvio_string,"%d mm", (uint16_t)(g_pluvio_cpt * PLUVIO_UNIT));
+		Serial.print("g_pluvio_cpt = ");Serial.print(g_pluvio_cpt);Serial.print(" / ");Serial.println(g_pluvio_string);
+		Serial.print("g_pluvio_night_cpt = ");Serial.print(g_pluvio_night_cpt);Serial.print(" / ");
+		Serial.println(g_pluvio_night_string);
+		Serial.print("g_anemo_cpt  = ");Serial.print(g_anemo_cpt);Serial.print(" / ");Serial.println(g_anemo_string);
+		Serial.print("g_anemo_max_day_cpt = ");Serial.print(g_anemo_max_day_cpt);Serial.print(" / ");
+		Serial.println(g_anemo_max_day_string);
+		Serial.println("");
+
+	    }
 	    g_cpt_milli = 0;
 	}
 	else
@@ -3422,25 +3404,23 @@ void process_domotix_quick(void)
 	    g_beginWait3msec = msec;
 	    edf->curr = analogRead(PIN_EDF);
 
-#ifdef DEBUG_EDF
-	    uint16_t value;
-	    value = edf->curr;
-	    Serial.print(value);
-#endif
-
 	    if (edf->curr > THRESHOLD_EDF)
 	    {
 		edf->state_curr = 1;
-#ifdef DEBUG_EDF
-		Serial.println("  1");
-#endif
+		if (g_serial_debug)
+		{
+		    Serial.print(edf->curr);
+		    Serial.println("  1");
+		}
 	    }
 	    else
 	    {
 		edf->state_curr = 0;
-#ifdef DEBUG_EDF
-		Serial.println("  0");
-#endif
+		if (g_serial_debug)
+		{
+		    Serial.print(edf->curr);
+		    Serial.println("  0");
+		}
 	    }
 
 	    if (edf->state_curr != edf->state_old)
@@ -3526,10 +3506,12 @@ void event_del(event_t *event)
     if ((event->id >= 0) && (event->id < NB_DELAY_MAX))
     {
 	g_delay[event->id].delay_inuse = 0;
-#ifdef DEBUG_EVT
-	Serial.print("event_del = ");
-	Serial.println(event->id);
-#endif
+
+	if (g_serial_debug)
+	{
+	    Serial.print("event_del = ");
+	    Serial.println(event->id);
+	}
     }
 }
 
@@ -3547,20 +3529,22 @@ void event_add(event_t *event, callback_delay call_after_delay)
 	    g_delay[index].delay_wait   = event->timeout;
 	    event->id = index;
 
-#ifdef DEBUG_EVT
-	    Serial.print("event_add = ");
-	    Serial.println(index);
-#endif
+	    if (g_serial_debug)
+	    {
+		Serial.print("event_add = ");
+		Serial.println(index);
+	    }
 	    return;
 	}
     }
 
     /* If there's no more buffer available, then wait and call CB
      */
-#ifdef DEBUG_EVT
-    Serial.println("/!\ warning No more buffer available");
-    Serial.println(index);
-#endif
+    if (g_serial_debug)
+    {
+	Serial.println("/!\ warning No more buffer available");
+	Serial.println(index);
+    }
 
     delay(event->timeout);
     if (call_after_delay != NULL)
@@ -3590,10 +3574,12 @@ void process_delay(void)
 			g_delay[index].cb();
 		    }
 		    g_delay[index].delay_inuse = 0;
-#ifdef DEBUG_EVT
-		    Serial.print("free = ");
-		    Serial.println(index);
-#endif
+
+		    if (g_serial_debug)
+		    {
+			Serial.print("free = ");
+			Serial.println(index);
+		    }
 		    return;
 		}
 	    }
@@ -3888,9 +3874,7 @@ void loop(void)
 {
     process_time();
     process_ethernet();
-#ifdef DEBUG_SERIAL
     process_serial();
-#endif
     process_recv_gsm();
     process_domotix();
     process_domotix_quick();
