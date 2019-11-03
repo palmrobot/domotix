@@ -7,7 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.54"
+#define VERSION				"v5.55"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -89,7 +89,7 @@
 #define PIN_OUT_LAMPE_3			41
 #define PIN_OUT_LAMPE_4			40
 
-#define PIN_SERIAL_DEBUG		xx
+/* #define PIN_SERIAL_DEBUG		xx */
 
 #define PIN_SS_ETH_CONTROLLER 		50
 
@@ -371,8 +371,8 @@ volatile uint16_t g_pluvio_cpt_glitch = 0;
 volatile uint16_t g_pluvio_night_cpt = 0;
 uint16_t g_pluvio_cpt_print = 0;
 uint16_t g_pluvio_max_cpt = 0;
-uint16_t g_pluvio_max_cpt_day = 0;
-uint16_t g_pluvio_max_cpt_mon = 0;
+uint8_t g_pluvio_max_cpt_day = 0;
+uint8_t g_pluvio_max_cpt_mon = 0;
 
 volatile uint32_t g_anemo_cpt = 0;
 uint32_t g_anemo_cpt_10sec = 0;
@@ -642,7 +642,7 @@ void setup(void)
     pinMode(PIN_BUREAU_PORTE, INPUT);
     pinMode(PIN_BUREAU_FENETRE, INPUT);
     pinMode(PIN_GSM, INPUT);
-    pinMode(PIN_SERIAL_DEBUG, INPUT);
+    /* pinMode(PIN_SERIAL_DEBUG, INPUT); */
 
     /* Init Output Ports */
     pinMode(PIN_OUT_EDF, OUTPUT);
@@ -668,7 +668,9 @@ void setup(void)
     digitalWrite(PIN_OUT_POULAILLER_ACTION, 0);
     analogWrite(PIN_OUT_BUZZER, 0);
 
-    g_serial_debug = digitalRead(PIN_SERIAL_DEBUG);
+    /* g_serial_debug = digitalRead(PIN_SERIAL_DEBUG); */
+    /* 0 : Off, 1 : On, 2 : debug file, 3 : debug meteo */
+    g_serial_debug = 1;
 
     /* init Process */
     g_process_serial   = PROCESS_OFF;
@@ -726,7 +728,7 @@ void setup(void)
     g_beginWait60sec = g_beginWait10sec;
     g_beginWait1sec  = g_beginWait10sec;
 
-    g_girouette = 0;
+    g_girouette = analogRead(PIN_METEO_GIROUETTE);
     g_girouette_cpt = 0;
     g_girouette_total = 0;
 
@@ -874,7 +876,7 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_WEEK, g_week);
 
     /* reset values */
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0);
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1);
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1);
 
@@ -885,11 +887,11 @@ void setup(void)
     sprintf(g_pluvio_max_string,"%d mm le %02d/%02d", pluvio, g_pluvio_max_cpt_day, g_pluvio_max_cpt_mon);
 
     /* reset values */
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1);
-    EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1);
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MIN, 0); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_ANEMO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR, g_anemo_max_year_cpt);
     EEPROM.get(EEPROM_ADDR_ANEMO_MAXYEAR_HOU, g_anemo_max_year_cpt_hour);
