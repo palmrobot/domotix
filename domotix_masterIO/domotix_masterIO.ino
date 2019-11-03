@@ -543,11 +543,11 @@ typedef struct
     uint32_t timeout;
 }event_t;
 
-event_t g_evt_buzz_before5min_on;
-event_t g_evt_buzz_before5min_off;
-event_t g_evt_cellier_porte_ext_open;
-event_t g_evt_process_domotix;
-event_t g_evt_timeNtp;
+event_t g_evt_buzz_before5min_on = {NB_DELAY_MAX, 0};
+event_t g_evt_buzz_before5min_off = {NB_DELAY_MAX, 0};
+event_t g_evt_cellier_porte_ext_open = {NB_DELAY_MAX, 0};
+event_t g_evt_process_domotix = {NB_DELAY_MAX, 0};
+event_t g_evt_timeNtp = {NB_DELAY_MAX, 0};
 
 /********************************************************/
 /*      NTP			                        */
@@ -955,7 +955,6 @@ void setup(void)
     initNTPpacket();
     setSyncInterval(TIME_SYNCHRO_SEC);
     setSyncProvider(NeedNtpTimeResync);
-    getNtpTime();
 
     if (g_serial_debug)
     {
