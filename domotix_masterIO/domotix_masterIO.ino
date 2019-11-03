@@ -7,7 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.57"
+#define VERSION				"v5.58"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -3911,7 +3911,7 @@ void process_do_it(void)
     uint8_t is_gsm_ready;
 
     /* Set date from the begining of last reboot of Domotix */
-    if (g_start == 0)
+    if ((g_NTP == 1) && (g_start == 0))
     {
 	sprintf(g_start_date,"%s %s", g_date, g_clock);
 	g_start = 1;
