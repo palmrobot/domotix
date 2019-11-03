@@ -1793,7 +1793,7 @@ void getNtpTime(void)
 
     /* Arm timer for received NTP packets */
     g_evt_timeNtp.timeout = 1500;
-    event_add(&g_evt_timeNtp, receiveNtpTime);
+    event_add(&g_evt_timeNtp, receiveNtpTime, "receiveNtpTime");
 }
 
 void receiveNtpTime(void)
@@ -1819,18 +1819,32 @@ void receiveNtpTime(void)
 	secsSince1900 |= (unsigned long)g_packetBuffer[43];
 
 	/* NTP is ok and running */
-	g_NTP			= 1;
 	g_process_schedule	= PROCESS_ON;
 	g_process_domotix_quick = PROCESS_ON;
 	g_process_time		= PROCESS_ON;
 
 	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
+
+	g_hour = hour();
+	g_min  = minute();
+	g_hour100 = (100*g_hour + g_min);
+	g_sec  = second();
+	g_day  = day();
+	g_mon  = month();
+	g_year = year();
+	g_week = weekday() - 1;
+
+	/* save current date and clock in global string var */
+	digitalClock();
+	digitalDate();
+
+	g_NTP = 1;
     }
     else
     {
 	/* re-arm to get all packets */
 	g_evt_timeNtp.timeout = 1500;
-	event_add(&g_evt_timeNtp, receiveNtpTime);
+	event_add(&g_evt_timeNtp, receiveNtpTime, "again receiveNtpTime");
     }
 }
 
@@ -2792,10 +2806,10 @@ void process_domotix(void)
 		/* Arm event to avoid openning the door too long */
 		/* 5min maxi 5*60*1000 = 300000*/
 		g_evt_cellier_porte_ext_open.timeout = 300000;
-		event_add(&g_evt_cellier_porte_ext_open, callback_wait_portecellier);
+		event_add(&g_evt_cellier_porte_ext_open, callback_wait_portecellier, "wait_portecellier");
 
 		g_evt_buzz_before5min_on.timeout = 1000;
-		event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
+		event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on, "buzz_portecellier_on");
 	    }
 	    else
 	    {
@@ -3305,7 +3319,7 @@ void process_domotix(void)
 	/* wait some time, before testing the next time the inputs */
 	g_process_domotix = PROCESS_OFF;
 	g_evt_process_domotix.timeout = PROCESS_DOMOTIX_TIMEOUT;
-	event_add(&g_evt_process_domotix, callback_wait_domotix);
+	event_add(&g_evt_process_domotix, callback_wait_domotix, "wait_domotix");
     }
 }
 
@@ -3380,7 +3394,7 @@ void process_domotix_quick(void)
 
 	    if (g_serial_debug)
 	    {
-		Serial.print("Meteo cpt millis = ");Serial.println(g_cpt_milli);
+		Serial.print("Counter loop each 1 sec = ");Serial.println(g_cpt_milli);
 	    }
 
 	    if (g_serial_debug == 3)
@@ -3432,7 +3446,7 @@ void process_domotix_quick(void)
 	    else
 	    {
 		edf->state_curr = 0;
-		if (g_serial_debug)
+		if ((g_serial_debug) && (edf->curr > 50))
 		{
 		    Serial.print(edf->curr);
 		    Serial.println("  0");
@@ -3471,7 +3485,7 @@ void process_time(void)
 	    g_process_time = PROCESS_OFF;
 	}
 
-	if (g_sec != second())
+	if ((g_NTP == 1 ) && (g_sec != second()))
 	{
 	    g_hour = hour();
 	    g_min  = minute();
@@ -3500,7 +3514,7 @@ void callback_buzz_portecellier_on(void)
     /* Active Buzzer */
     analogWrite(PIN_OUT_BUZZER, 220);
     g_evt_buzz_before5min_off.timeout = 1000;
-    event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off);
+    event_add(&g_evt_buzz_before5min_off, callback_buzz_portecellier_off, "call buzz_portecellier_off");
 }
 
 void callback_buzz_portecellier_off(void)
@@ -3508,7 +3522,7 @@ void callback_buzz_portecellier_off(void)
     /* Stop buzzer */
     analogWrite(PIN_OUT_BUZZER, 0);
     g_evt_buzz_before5min_on.timeout = 500;
-    event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on);
+    event_add(&g_evt_buzz_before5min_on, callback_buzz_portecellier_on, "call buzz_portecellier_on");
 }
 
 void callback_wait_portecellier(void)
@@ -3541,7 +3555,7 @@ void event_del(event_t *event)
     }
 }
 
-void event_add(event_t *event, callback_delay call_after_delay)
+void event_add(event_t *event, callback_delay call_after_delay, const char *str)
 {
     int8_t index;
 
@@ -3557,7 +3571,9 @@ void event_add(event_t *event, callback_delay call_after_delay)
 
 	    if (g_serial_debug)
 	    {
-		Serial.print("event_add = ");
+		Serial.print("event_add ");
+		Serial.print(str);
+		Serial.print(" = ");
 		Serial.println(index);
 	    }
 	    return;
