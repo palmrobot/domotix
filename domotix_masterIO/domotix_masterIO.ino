@@ -7,7 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.55"
+#define VERSION				"v5.57"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -171,7 +171,7 @@ uint8_t g_send_to_gsm[CMD_DATA_MAX];
 #define EEPROM_ADDR_MAXYEAR_MON			18
 #define EEPROM_ADDR_EDF_WEEK_HC			20
 #define EEPROM_ADDR_EDF_WEEK_HP			24
-#define EEPROM_ADDR_WEEK			28
+/* #define EEPROM_ADDR_WEEK			28 */
 #define EEPROM_ADDR_PLUVIO_MAXYEAR		29
 #define EEPROM_ADDR_PLUVIO_MAXYEAR_DAY		31
 #define EEPROM_ADDR_PLUVIO_MAXYEAR_MON		32
@@ -547,6 +547,7 @@ event_t g_evt_buzz_before5min_on;
 event_t g_evt_buzz_before5min_off;
 event_t g_evt_cellier_porte_ext_open;
 event_t g_evt_process_domotix;
+event_t g_evt_timeNtp;
 
 /********************************************************/
 /*      NTP			                        */
@@ -555,7 +556,7 @@ event_t g_evt_process_domotix;
 #define TIMEZONE			2
 #define LOCAL_PORT_NTP			8888
 #define NTP_PACKET_SIZE			48
-#define TIME_SYNCHRO_SEC		200
+#define TIME_SYNCHRO_SEC		300
 
 /* server Free */
 char g_timeServer[] = "ntp.midway.ovh";
@@ -670,7 +671,7 @@ void setup(void)
 
     /* g_serial_debug = digitalRead(PIN_SERIAL_DEBUG); */
     /* 0 : Off, 1 : On, 2 : debug file, 3 : debug meteo */
-    g_serial_debug = 1;
+    g_serial_debug = 0;
 
     /* init Process */
     g_process_serial   = PROCESS_OFF;
@@ -681,7 +682,7 @@ void setup(void)
     g_process_ethernet = PROCESS_ON;
     g_process_domotix  = PROCESS_ON;
     g_process_domotix_quick  = PROCESS_OFF;
-    g_process_time     = PROCESS_OFF;
+    g_process_time     = PROCESS_ON;
     g_process_delay    = PROCESS_ON;
     g_process_schedule = PROCESS_OFF;
     g_process_action   = PROCESS_ACTION_NONE;
@@ -699,12 +700,6 @@ void setup(void)
 
     /* Init SDCard */
     SD.begin(CS_PIN_SDCARD);
-    delay(100);
-
-    /* init UDP for NTP */
-    g_Udp.begin(LOCAL_PORT_NTP);
-    setSyncInterval(TIME_SYNCHRO_SEC);
-    setSyncProvider(getNtpTime);
     delay(100);
 
     /* Init global var */
@@ -873,12 +868,12 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
     sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
 
-    EEPROM.get(EEPROM_ADDR_WEEK, g_week);
+    /* EEPROM.get(EEPROM_ADDR_WEEK, g_week); */
 
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1);
-    EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1);
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
+    /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_MON, 1); */
 
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.get(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
@@ -955,6 +950,13 @@ void setup(void)
     /* Initialisation de l'interruption INT1 (comptage anemometre) */
     attachInterrupt(digitalPinToInterrupt(PIN_METEO_ANEMOMETRE), interrupt_anemo, RISING);
 
+    /* init UDP for NTP */
+    g_Udp.begin(LOCAL_PORT_NTP);
+    initNTPpacket();
+    setSyncInterval(TIME_SYNCHRO_SEC);
+    setSyncProvider(NeedNtpTimeResync);
+    getNtpTime();
+
     if (g_serial_debug)
     {
 	PgmPrint("Free RAM: ");
@@ -972,7 +974,7 @@ void save_eeprom()
 
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
-    EEPROM.put(EEPROM_ADDR_WEEK, g_week);
+    /* EEPROM.put(EEPROM_ADDR_WEEK, g_week); */
 
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
@@ -1490,7 +1492,7 @@ void deal_with_code(File *file, char item, char type, char code)
 	    /* then get the id */
 	    id = file->read();
 
-	    /* action lampe 4 */
+	    /* action Day of the week */
 	    if ((id == 'L') && (g_week == 1))
 	    {
 		g_client.write((uint8_t*)ptr_code->name[0],
@@ -1777,11 +1779,8 @@ void digitalDate(void)
     sprintf(g_date,"%02d/%02d/%02d",g_day, g_mon, g_year-2000);
 }
 
-time_t getNtpTime(void)
+void getNtpTime(void)
 {
-    int size;
-    unsigned long secsSince1900;
-
     /* discard any previously received packets */
     while (g_Udp.parsePacket() > 0);
 
@@ -1790,47 +1789,58 @@ time_t getNtpTime(void)
 	Serial.println("Transmit NTP");
     }
 
-    sendNTPpacket(g_timeServer);
+    sendNTPpacket();
 
-    g_beginWait = millis();
-    while (millis() - g_beginWait < 1500)
+    /* Arm timer for received NTP packets */
+    g_evt_timeNtp.timeout = 1500;
+    event_add(&g_evt_timeNtp, receiveNtpTime);
+}
+
+void receiveNtpTime(void)
+{
+    int    size;
+    time_t secsSince1900;
+
+    size = g_Udp.parsePacket();
+
+    if (size >= NTP_PACKET_SIZE)
     {
-	size = g_Udp.parsePacket();
-
-	if (size >= NTP_PACKET_SIZE)
+	if (g_serial_debug)
 	{
-
-	    if (g_serial_debug)
-	    {
-		Serial.println("Receive NTP");
-	    }
-
-	    g_Udp.read(g_packetBuffer, NTP_PACKET_SIZE);
-
-	    /* NTP is ok and running */
-	    g_NTP = 1;
-
-	    g_process_schedule = PROCESS_ON;
-	    g_process_domotix_quick  = PROCESS_ON;
-	    g_process_time     = PROCESS_ON;
-
-	    /* convert four bytes starting at location 40 to a long integer */
-	    secsSince1900 =  (unsigned long)g_packetBuffer[40] << 24;
-	    secsSince1900 |= (unsigned long)g_packetBuffer[41] << 16;
-	    secsSince1900 |= (unsigned long)g_packetBuffer[42] << 8;
-	    secsSince1900 |= (unsigned long)g_packetBuffer[43];
-	    return secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR;
+	    Serial.println("Received NTP");
 	}
+
+	g_Udp.read(g_packetBuffer, NTP_PACKET_SIZE);
+
+	/* convert four bytes starting at location 40 to a long integer */
+	secsSince1900 =  (unsigned long)g_packetBuffer[40] << 24;
+	secsSince1900 |= (unsigned long)g_packetBuffer[41] << 16;
+	secsSince1900 |= (unsigned long)g_packetBuffer[42] << 8;
+	secsSince1900 |= (unsigned long)g_packetBuffer[43];
+
+	/* NTP is ok and running */
+	g_NTP			= 1;
+	g_process_schedule	= PROCESS_ON;
+	g_process_domotix_quick = PROCESS_ON;
+	g_process_time		= PROCESS_ON;
+
+	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
     }
-    if (g_serial_debug)
+    else
     {
-	Serial.println("No NTP :-(");
+	/* re-arm to get all packets */
+	g_evt_timeNtp.timeout = 1500;
+	event_add(&g_evt_timeNtp, receiveNtpTime);
     }
+}
+
+time_t NeedNtpTimeResync(void)
+{
     return 0;
 }
 
-/* send an NTP request to the time server at the given address */
-void sendNTPpacket(char *address)
+/* Init an NTP request */
+void initNTPpacket(void)
 {
     /* set all bytes in the buffer to 0 */
     memset(g_packetBuffer, 0, NTP_PACKET_SIZE);
@@ -1847,12 +1857,16 @@ void sendNTPpacket(char *address)
     g_packetBuffer[13]  = 0x4E;
     g_packetBuffer[14]  = 49;
     g_packetBuffer[15]  = 52;
+}
 
+/* send an NTP request to the time server at the given address */
+void sendNTPpacket(void)
+{
     /* all NTP fields have been given values, now
      * you can send a packet requesting a timestamp:
      * NTP requests are to port 123
      */
-    g_Udp.beginPacket(address, 123);
+    g_Udp.beginPacket(g_timeServer, 123);
     g_Udp.write(g_packetBuffer, NTP_PACKET_SIZE);
     g_Udp.endPacket();
 }
@@ -3291,7 +3305,7 @@ void process_domotix(void)
 	/* wait some time, before testing the next time the inputs */
 	g_process_domotix = PROCESS_OFF;
 	g_evt_process_domotix.timeout = PROCESS_DOMOTIX_TIMEOUT;
-	event_add(&g_evt_process_domotix, callback_wait_pdomotix);
+	event_add(&g_evt_process_domotix, callback_wait_domotix);
     }
 }
 
@@ -3448,6 +3462,15 @@ void process_time(void)
 {
     if (g_process_time != PROCESS_OFF)
     {
+	/* timeNotSet, timeNeedsSync, timeSet */
+	if (timeStatus() != timeSet)
+	{
+	    getNtpTime();
+
+	    /* Wait for getting time through NTP */
+	    g_process_time = PROCESS_OFF;
+	}
+
 	if (g_sec != second())
 	{
 	    g_hour = hour();
@@ -3457,6 +3480,7 @@ void process_time(void)
 	    g_day  = day();
 	    g_mon  = month();
 	    g_year = year();
+	    g_week = weekday() - 1;
 
 	    /* save current date and clock in global string var */
 	    digitalClock();
@@ -3465,7 +3489,7 @@ void process_time(void)
     }
 }
 
-void callback_wait_pdomotix(void)
+void callback_wait_domotix(void)
 {
     /* restart process */
     g_process_domotix = PROCESS_ON;
@@ -3599,6 +3623,8 @@ void process_schedule(void)
     {
 	/*************************************/
 	/* Scheduling for temperature sensor */
+	/* Each time à 8h00, 14h00 and 20h00 */
+	/*************************************/
 	if ((g_hour100 == 800) || (g_hour100 == 1400) || (g_hour100 == 2000))
 	{
 	    if (g_sched_temperature == 0)
@@ -3615,6 +3641,10 @@ void process_schedule(void)
 	    g_sched_temperature = 0;
 	}
 
+	/*************************************/
+	/* Scheduling for givre on cars      */
+	/* At 7h45 from monday to friday     */
+	/*************************************/
 	/* Check negative temperature and send SMS to inform cars class */
 	if ((g_hour100 == 745) && ((g_week >= 1) && (g_week <= 5 )))
 	{
@@ -3632,7 +3662,10 @@ void process_schedule(void)
 	    g_sched_daymin_sms = 0;
 	}
 
-	/* save pluvio night at 8h00 */
+	/*************************************/
+	/* Scheduling for pluvio during night*/
+	/* Every day at 8h00                 */
+	/*************************************/
 	if (g_hour100 == 800)
 	{
 	    if (g_sched_night_end == 0)
@@ -3646,6 +3679,10 @@ void process_schedule(void)
 	    g_sched_night_end = 0;
 	}
 
+	/*************************************/
+	/* Scheduling for pluvio during day  */
+	/* Every day at 20h00                */
+	/*************************************/
 	/* reset pluvio night at 20h00 */
 	if (g_hour100 == 2000)
 	{
@@ -3660,6 +3697,10 @@ void process_schedule(void)
 	    g_sched_night_start = 0;
 	}
 
+	/******************************************/
+	/* Scheduling for reset temperature count */
+	/* Every day at 00h00                     */
+	/******************************************/
 	/* reset temperature and meteo values of the day at midnight */
 	if (g_hour100 == 0)
 	{
@@ -3706,10 +3747,10 @@ void process_schedule(void)
 		}
 
 		/* change day of the week */
-		if (g_week == 7)
-		    g_week = 1;
-		else
-		    g_week++;
+		/* if (g_week == 7) */
+		/*     g_week = 1; */
+		/* else */
+		/*     g_week++; */
 
 		/* save all in eeprom */
 		save_eeprom();
@@ -3720,6 +3761,10 @@ void process_schedule(void)
 	    g_sched_midnight = 0;
 	}
 
+	/**********************************************/
+	/* Scheduling for reset temperature each year */
+	/* Every year at 00h00  1st January           */
+	/**********************************************/
 	/* reset temperature of the year at first january */
 	if ((g_hour100 == 0) && (g_day == 1) && (g_mon == 1))
 	{
@@ -3736,7 +3781,11 @@ void process_schedule(void)
 	    g_sched_temp_year = 0;
 	}
 
-	/*************************************/
+	/****************************************************/
+	/* Schedulingcheck if door must be opened or closed */
+	/* Every first part of month from 1 to 15           */
+	/* Check hours with sun and moon table              */
+	/****************************************************/
 	/* check if door must be opened or closed */
 	if (g_day < 16)
 	    half_month = 0;
@@ -3760,6 +3809,11 @@ void process_schedule(void)
 	    g_sched_door_already_opened = 0;
 	}
 
+	/****************************************************/
+	/* Schedulingcheck if door must be opened or closed */
+	/* Every first part of month from 1 to 15           */
+	/* Check hours with sun and moon table              */
+	/****************************************************/
 	if (g_hour100 == g_time_to_close[2*g_mon + half_month])
 	{
 	    if (g_sched_door_already_closed == 0)
@@ -3775,12 +3829,6 @@ void process_schedule(void)
 	else
 	{
 	    g_sched_door_already_closed = 0;
-	}
-
-	if (g_start == 0)
-	{
-	    sprintf(g_start_date,"%s %s", g_date, g_clock);
-	    g_start = 1;
 	}
     }
 }
@@ -3861,6 +3909,13 @@ void process_action(void)
 void process_do_it(void)
 {
     uint8_t is_gsm_ready;
+
+    /* Set date from the begining of last reboot of Domotix */
+    if (g_start == 0)
+    {
+	sprintf(g_start_date,"%s %s", g_date, g_clock);
+	g_start = 1;
+    }
 
     /* do it every time in order to be sure to be allowed to send msg to GSM */
     is_gsm_ready = digitalRead(PIN_GSM);
