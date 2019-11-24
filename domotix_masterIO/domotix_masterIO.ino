@@ -7,7 +7,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.58"
+#define VERSION				"v5.59"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -197,9 +197,9 @@ uint32_t g_cpt_milli = 0;
 uint8_t g_process_ethernet;
 uint8_t g_process_domotix;
 uint8_t g_process_domotix_quick;
-uint8_t g_process_time;
 uint8_t g_process_schedule;
 uint8_t g_process_delay;
+uint8_t g_process_do_it;
 
 volatile uint8_t g_process_action;
 #define PROCESS_ACTION_NONE			PROCESS_OFF
@@ -680,11 +680,13 @@ void setup(void)
 	g_process_serial   = PROCESS_ON;
     }
     g_process_ethernet = PROCESS_ON;
-    g_process_domotix  = PROCESS_ON;
-    g_process_domotix_quick  = PROCESS_OFF;
-    g_process_time     = PROCESS_ON;
     g_process_delay    = PROCESS_ON;
+
     g_process_schedule = PROCESS_OFF;
+    g_process_domotix_quick  = PROCESS_OFF;
+    g_process_domotix  = PROCESS_OFF;
+    g_process_do_it    = PROCESS_OFF;
+
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
 
@@ -954,7 +956,7 @@ void setup(void)
     g_Udp.begin(LOCAL_PORT_NTP);
     initNTPpacket();
     setSyncInterval(TIME_SYNCHRO_SEC);
-    setSyncProvider(NeedNtpTimeResync);
+    setSyncProvider(getNtpTime());
 
     if (g_serial_debug)
     {
@@ -1778,7 +1780,7 @@ void digitalDate(void)
     sprintf(g_date,"%02d/%02d/%02d",g_day, g_mon, g_year-2000);
 }
 
-void getNtpTime(void)
+time_t getNtpTime(void)
 {
     /* discard any previously received packets */
     while (g_Udp.parsePacket() > 0);
@@ -1793,6 +1795,8 @@ void getNtpTime(void)
     /* Arm timer for received NTP packets */
     g_evt_timeNtp.timeout = 1500;
     event_add(&g_evt_timeNtp, receiveNtpTime, "receiveNtpTime");
+
+    return 0;
 }
 
 void receiveNtpTime(void)
@@ -1820,7 +1824,8 @@ void receiveNtpTime(void)
 	/* NTP is ok and running */
 	g_process_schedule	= PROCESS_ON;
 	g_process_domotix_quick = PROCESS_ON;
-	g_process_time		= PROCESS_ON;
+	g_process_domotix	= PROCESS_ON;
+	g_process_do_it		= PROCESS_ON;
 
 	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
 
@@ -1845,11 +1850,6 @@ void receiveNtpTime(void)
 	g_evt_timeNtp.timeout = 1500;
 	event_add(&g_evt_timeNtp, receiveNtpTime, "again receiveNtpTime");
     }
-}
-
-time_t NeedNtpTimeResync(void)
-{
-    return 0;
 }
 
 /* Init an NTP request */
@@ -3470,38 +3470,6 @@ void process_domotix_quick(void)
     }
 }
 
-
-void process_time(void)
-{
-    if (g_process_time != PROCESS_OFF)
-    {
-	/* timeNotSet, timeNeedsSync, timeSet */
-	if (timeStatus() != timeSet)
-	{
-	    getNtpTime();
-
-	    /* Wait for getting time through NTP */
-	    g_process_time = PROCESS_OFF;
-	}
-
-	if ((g_NTP == 1 ) && (g_sec != second()))
-	{
-	    g_hour = hour();
-	    g_min  = minute();
-	    g_hour100 = (100*g_hour + g_min);
-	    g_sec  = second();
-	    g_day  = day();
-	    g_mon  = month();
-	    g_year = year();
-	    g_week = weekday() - 1;
-
-	    /* save current date and clock in global string var */
-	    digitalClock();
-	    digitalDate();
-	}
-    }
-}
-
 void callback_wait_domotix(void)
 {
     /* restart process */
@@ -3925,26 +3893,44 @@ void process_do_it(void)
 {
     uint8_t is_gsm_ready;
 
-    /* Set date from the begining of last reboot of Domotix */
-    if ((g_NTP == 1) && (g_start == 0))
+    if (g_process_do_it != PROCESS_OFF)
     {
-	sprintf(g_start_date,"%s %s", g_date, g_clock);
-	g_start = 1;
-    }
+	/* Set date from the begining of last reboot of Domotix */
+	if (g_start == 0)
+	{
+	    sprintf(g_start_date,"%s %s", g_date, g_clock);
+	    g_start = 1;
+	}
 
-    /* do it every time in order to be sure to be allowed to send msg to GSM */
-    is_gsm_ready = digitalRead(PIN_GSM);
-    if (is_gsm_ready != g_init_gsm)
-    {
-	g_init_gsm = is_gsm_ready;
-	digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+	if (g_sec != second())
+	{
+	    g_hour = hour();
+	    g_min  = minute();
+	    g_hour100 = (100*g_hour + g_min);
+	    g_sec  = second();
+	    g_day  = day();
+	    g_mon  = month();
+	    g_year = year();
+	    g_week = weekday() - 1;
+
+	    /* save current date and clock in global string var */
+	    digitalClock();
+	    digitalDate();
+	}
+
+	/* do it every time in order to be sure to be allowed to send msg to GSM */
+	is_gsm_ready = digitalRead(PIN_GSM);
+	if (is_gsm_ready != g_init_gsm)
+	{
+	    g_init_gsm = is_gsm_ready;
+	    digitalWrite(PIN_OUT_GSM_INIT, g_init_gsm);
+	}
     }
 }
 
 
 void loop(void)
 {
-    process_time();
     process_ethernet();
     process_serial();
     process_recv_gsm();
