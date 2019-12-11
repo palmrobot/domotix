@@ -1,5 +1,3 @@
-/*#include <DateTime.h>
-  #include <DateTimeStrings.h>*/
 #include <avr/pgmspace.h>
 #include <SPI.h>
 #include <Time.h>
@@ -7,7 +5,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.59"
+#define VERSION				"v5.62"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -685,7 +683,7 @@ void setup(void)
     g_process_schedule = PROCESS_OFF;
     g_process_domotix_quick  = PROCESS_OFF;
     g_process_domotix  = PROCESS_OFF;
-    g_process_do_it    = PROCESS_OFF;
+    g_process_do_it    = PROCESS_ON;
 
     g_process_action   = PROCESS_ACTION_NONE;
     g_process_recv_gsm = PROCESS_RECV_GSM_WAIT_COMMAND;
@@ -823,6 +821,10 @@ void setup(void)
     g_grenier_lumiere.state_old = 2;
     g_grenier_lumiere.id = -1;
 
+    /* reset values */
+    /* EEPROM.put(EEPROM_ADDR_EDF_HC, 2039); */
+    /* EEPROM.put(EEPROM_ADDR_EDF_HP, 1876); */
+
     g_edf_hc.old = 999999;
     g_edf_hc.id = -1;
     EEPROM.get(EEPROM_ADDR_EDF_HC, g_edf_hc.value);
@@ -954,9 +956,8 @@ void setup(void)
 
     /* init UDP for NTP */
     g_Udp.begin(LOCAL_PORT_NTP);
-    initNTPpacket();
+    setSyncProvider(getNtpTime);
     setSyncInterval(TIME_SYNCHRO_SEC);
-    setSyncProvider(getNtpTime());
 
     if (g_serial_debug)
     {
@@ -1321,7 +1322,7 @@ void deal_with_code(File *file, char item, char type, char code)
 	}break;
 	case 'v':
 	{
-	    if (g_NTP)
+	    if (g_start)
 	    {
 		g_client.print(g_start_date);
 	    }
@@ -1782,8 +1783,7 @@ void digitalDate(void)
 
 time_t getNtpTime(void)
 {
-    /* discard any previously received packets */
-    while (g_Udp.parsePacket() > 0);
+    int    size;
 
     if (g_serial_debug)
     {
@@ -1805,14 +1805,13 @@ void receiveNtpTime(void)
     time_t secsSince1900;
 
     size = g_Udp.parsePacket();
+    if (g_serial_debug)
+    {
+	Serial.print("Received NTP size = "); Serial.print(size);Serial.print("/");Serial.println(NTP_PACKET_SIZE);
+    }
 
     if (size >= NTP_PACKET_SIZE)
     {
-	if (g_serial_debug)
-	{
-	    Serial.println("Received NTP");
-	}
-
 	g_Udp.read(g_packetBuffer, NTP_PACKET_SIZE);
 
 	/* convert four bytes starting at location 40 to a long integer */
@@ -1825,7 +1824,6 @@ void receiveNtpTime(void)
 	g_process_schedule	= PROCESS_ON;
 	g_process_domotix_quick = PROCESS_ON;
 	g_process_domotix	= PROCESS_ON;
-	g_process_do_it		= PROCESS_ON;
 
 	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
 
@@ -1844,16 +1842,10 @@ void receiveNtpTime(void)
 
 	g_NTP = 1;
     }
-    else
-    {
-	/* re-arm to get all packets */
-	g_evt_timeNtp.timeout = 1500;
-	event_add(&g_evt_timeNtp, receiveNtpTime, "again receiveNtpTime");
-    }
 }
 
-/* Init an NTP request */
-void initNTPpacket(void)
+/* send an NTP request to the time server at the given address */
+void sendNTPpacket(void)
 {
     /* set all bytes in the buffer to 0 */
     memset(g_packetBuffer, 0, NTP_PACKET_SIZE);
@@ -1870,11 +1862,7 @@ void initNTPpacket(void)
     g_packetBuffer[13]  = 0x4E;
     g_packetBuffer[14]  = 49;
     g_packetBuffer[15]  = 52;
-}
 
-/* send an NTP request to the time server at the given address */
-void sendNTPpacket(void)
-{
     /* all NTP fields have been given values, now
      * you can send a packet requesting a timestamp:
      * NTP requests are to port 123
@@ -3393,7 +3381,7 @@ void process_domotix_quick(void)
 
 	    if (g_serial_debug)
 	    {
-		Serial.print("Counter loop each 1 sec = ");Serial.println(g_cpt_milli);
+		Serial.print(g_clock);Serial.print(" Counter = ");Serial.println(g_cpt_milli);
 	    }
 
 	    if (g_serial_debug == 3)
@@ -3896,7 +3884,7 @@ void process_do_it(void)
     if (g_process_do_it != PROCESS_OFF)
     {
 	/* Set date from the begining of last reboot of Domotix */
-	if (g_start == 0)
+	if ((g_start == 0) && (g_NTP == 1))
 	{
 	    sprintf(g_start_date,"%s %s", g_date, g_clock);
 	    g_start = 1;
