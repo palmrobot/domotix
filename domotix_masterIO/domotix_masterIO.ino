@@ -3350,7 +3350,7 @@ void process_domotix_quick(void)
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
 		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
 
-		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
+		if ((g_anemo_max_day_cpt >= g_anemo_max_year_cpt) && ((g_anemo_max_day_cpt * ANEMO_10_SEC) < 200))
 		{
 		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
 		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_day_string);
