@@ -5,7 +5,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.62"
+#define VERSION				"v5.64"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -1820,27 +1820,30 @@ void receiveNtpTime(void)
 	secsSince1900 |= (unsigned long)g_packetBuffer[42] << 8;
 	secsSince1900 |= (unsigned long)g_packetBuffer[43];
 
-	/* NTP is ok and running */
-	g_process_schedule	= PROCESS_ON;
-	g_process_domotix_quick = PROCESS_ON;
-	g_process_domotix	= PROCESS_ON;
-
 	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
 
-	g_hour = hour();
-	g_min  = minute();
-	g_hour100 = (100*g_hour + g_min);
-	g_sec  = second();
-	g_day  = day();
-	g_mon  = month();
-	g_year = year();
-	g_week = weekday() - 1;
+	if (g_NTP == 0)
+	{
+	    /* NTP is ok and running */
+	    g_process_schedule	= PROCESS_ON;
+	    g_process_domotix_quick = PROCESS_ON;
+	    g_process_domotix	= PROCESS_ON;
 
-	/* save current date and clock in global string var */
-	digitalClock();
-	digitalDate();
+	    g_hour = hour();
+	    g_min  = minute();
+	    g_hour100 = (100*g_hour + g_min);
+	    g_sec  = second();
+	    g_day  = day();
+	    g_mon  = month();
+	    g_year = year();
+	    g_week = weekday() - 1;
 
-	g_NTP = 1;
+	    /* save current date and clock in global string var */
+	    digitalClock();
+	    digitalDate();
+
+	    g_NTP = 1;
+	}
     }
 }
 
@@ -3346,19 +3349,9 @@ void process_domotix_quick(void)
 	    if (g_anemo_cpt_10sec > g_anemo_max_day_cpt)
 	    {
 		g_anemo_max_day_cpt = g_anemo_cpt_10sec;
-		sprintf(g_anemo_max_day_string,"%d.%d km/h le %02d/%02d à %02dh%02d",
+		sprintf(g_anemo_max_day_string,"%u.%u km/h le %02d/%02d à %02dh%02d",
 		    (uint16_t)(g_anemo_max_day_cpt * ANEMO_10_SEC),
 		    (uint16_t)((g_anemo_max_day_cpt * ANEMO_UNIT_10)%100), g_day, g_mon, g_hour, g_min);
-
-		if ((g_anemo_max_day_cpt >= g_anemo_max_year_cpt) && ((g_anemo_max_day_cpt * ANEMO_10_SEC) < 200))
-		{
-		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
-		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_day_string);
-		    g_anemo_max_year_cpt_hour = g_hour;
-		    g_anemo_max_year_cpt_min = g_min;
-		    g_anemo_max_year_cpt_day = g_day;
-		    g_anemo_max_year_cpt_mon = g_mon;
-		}
 	    }
 	}
 
@@ -3539,7 +3532,7 @@ void event_add(event_t *event, callback_delay call_after_delay, const char *str)
      */
     if (g_serial_debug)
     {
-	Serial.println("/!\ warning No more buffer available");
+	Serial.println("/!\\ warning No more buffer available");
 	Serial.println(index);
     }
 
@@ -3678,6 +3671,16 @@ void process_schedule(void)
 	    if (g_sched_midnight == 0)
 	    {
 		g_sched_midnight = 1;
+
+		if (g_anemo_max_day_cpt >= g_anemo_max_year_cpt)
+		{
+		    g_anemo_max_year_cpt = g_anemo_max_day_cpt;
+		    sprintf(g_anemo_max_year_string,"%s",g_anemo_max_day_string);
+		    g_anemo_max_year_cpt_hour = g_hour;
+		    g_anemo_max_year_cpt_min = g_min;
+		    g_anemo_max_year_cpt_day = g_day;
+		    g_anemo_max_year_cpt_mon = g_mon;
+		}
 
 		/* reset meteo values */
 		if (g_pluvio_cpt_print >= g_pluvio_max_cpt)
