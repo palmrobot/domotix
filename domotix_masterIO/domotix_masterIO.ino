@@ -5,7 +5,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.64"
+#define VERSION				"v5.65"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -680,9 +680,9 @@ void setup(void)
     g_process_ethernet = PROCESS_ON;
     g_process_delay    = PROCESS_ON;
 
-    g_process_schedule = PROCESS_OFF;
-    g_process_domotix_quick  = PROCESS_OFF;
-    g_process_domotix  = PROCESS_OFF;
+    g_process_schedule = PROCESS_ON;
+    g_process_domotix_quick  = PROCESS_ON;
+    g_process_domotix  = PROCESS_ON;
     g_process_do_it    = PROCESS_ON;
 
     g_process_action   = PROCESS_ACTION_NONE;
@@ -872,8 +872,6 @@ void setup(void)
     EEPROM.get(EEPROM_ADDR_MAXYEAR_MON, g_temperature_yearmax_mon);
     sprintf(g_tempyearmax_string,"%d°C le %02d/%02d à %02dh%02d",g_temperature_yearmax, g_temperature_yearmax_day, g_temperature_yearmax_mon, g_temperature_yearmax_hour, g_temperature_yearmax_min);
 
-    /* EEPROM.get(EEPROM_ADDR_WEEK, g_week); */
-
     /* reset values */
     /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, 0); */
     /* EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, 1); */
@@ -966,6 +964,23 @@ void setup(void)
 
 	PgmPrintln("Init OK");
     }
+
+    /* Init sequence */
+    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
+    delay(150);
+    digitalWrite(PIN_OUT_EDF, LIGHT_ON);
+    delay(1500);
+    digitalWrite(PIN_OUT_EDF, LIGHT_OFF);
 }
 
 void save_eeprom()
@@ -976,7 +991,6 @@ void save_eeprom()
 
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HC, g_edf_week_hc);
     EEPROM.put(EEPROM_ADDR_EDF_WEEK_HP, g_edf_week_hp);
-    /* EEPROM.put(EEPROM_ADDR_WEEK, g_week); */
 
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR, g_pluvio_max_cpt);
     EEPROM.put(EEPROM_ADDR_PLUVIO_MAXYEAR_DAY, g_pluvio_max_cpt_day);
@@ -1822,28 +1836,8 @@ void receiveNtpTime(void)
 
 	setTime(secsSince1900 - 2208988800UL + g_timezone * SECS_PER_HOUR);
 
-	if (g_NTP == 0)
-	{
-	    /* NTP is ok and running */
-	    g_process_schedule	= PROCESS_ON;
-	    g_process_domotix_quick = PROCESS_ON;
-	    g_process_domotix	= PROCESS_ON;
-
-	    g_hour = hour();
-	    g_min  = minute();
-	    g_hour100 = (100*g_hour + g_min);
-	    g_sec  = second();
-	    g_day  = day();
-	    g_mon  = month();
-	    g_year = year();
-	    g_week = weekday() - 1;
-
-	    /* save current date and clock in global string var */
-	    digitalClock();
-	    digitalDate();
-
-	    g_NTP = 1;
-	}
+	/* NTP is ok and running */
+	g_NTP = 1;
     }
 }
 
@@ -3719,12 +3713,6 @@ void process_schedule(void)
 		    save_entry_string("V.txt", data1, data2);
 		    g_edf_week_hp = g_edf_hp.value;
 		}
-
-		/* change day of the week */
-		/* if (g_week == 7) */
-		/*     g_week = 1; */
-		/* else */
-		/*     g_week++; */
 
 		/* save all in eeprom */
 		save_eeprom();
