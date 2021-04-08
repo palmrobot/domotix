@@ -5,7 +5,7 @@
 #include <Ethernet2.h>
 #include <EEPROM.h>
 
-#define VERSION				"v5.65"
+#define VERSION				"v5.66"
 
 /********************************************************/
 /*      Pin  definitions                               */
@@ -402,12 +402,11 @@ uint8_t g_critical_alertes;
 /*      Ethernet global definitions                     */
 /********************************************************/
 uint8_t g_mac_addr[] = { 0x90, 0xA2, 0xDA, 0x11, 0x1C, 0x44};
-uint8_t g_ip_addr[] = { 192, 168, 5, 20 };
+uint8_t g_ip_addr[] = { 192, 168, 4, 20 };
 
 EthernetServer g_server(9090);
 EthernetClient g_client;
 uint8_t g_remoteIP[] = {0, 0, 0, 0};
-//g_client.getRemoteIP(g_remoteIP); // where rip is defined as byte rip[] = {0,0,0,0 };
 
 #define LINE_MAX_LEN			100
 char g_line[LINE_MAX_LEN + 1];
@@ -2281,7 +2280,7 @@ void process_ethernet(void)
 			    if ((strstr(g_filename.name, "config.htm") != NULL) &&
 				(g_remoteIP[0] != 192) &&
 				(g_remoteIP[1] != 168) &&
-				(g_remoteIP[2] != 5))
+				(g_remoteIP[2] != 4))
 			    {
 				g_client.println(F("HTTP/1.1 404 Not Authorized"));
 				g_client.println(F("Content-Type: text/html"));
@@ -3875,28 +3874,30 @@ void process_do_it(void)
     if (g_process_do_it != PROCESS_OFF)
     {
 	/* Set date from the begining of last reboot of Domotix */
-	if ((g_start == 0) && (g_NTP == 1))
+	if (g_NTP == 1)
 	{
-	    sprintf(g_start_date,"%s %s", g_date, g_clock);
-	    g_start = 1;
+	    if (g_sec != second())
+	    {
+		g_hour = hour();
+		g_min  = minute();
+		g_hour100 = (100*g_hour + g_min);
+		g_sec  = second();
+		g_day  = day();
+		g_mon  = month();
+		g_year = year();
+		g_week = weekday() - 1;
+
+		/* save current date and clock in global string var */
+		digitalClock();
+		digitalDate();
+	    }
+
+	    if (g_start == 0)
+	    {
+		sprintf(g_start_date,"%s %s", g_date, g_clock);
+		g_start = 1;
+	    }
 	}
-
-	if (g_sec != second())
-	{
-	    g_hour = hour();
-	    g_min  = minute();
-	    g_hour100 = (100*g_hour + g_min);
-	    g_sec  = second();
-	    g_day  = day();
-	    g_mon  = month();
-	    g_year = year();
-	    g_week = weekday() - 1;
-
-	    /* save current date and clock in global string var */
-	    digitalClock();
-	    digitalDate();
-	}
-
 	/* do it every time in order to be sure to be allowed to send msg to GSM */
 	is_gsm_ready = digitalRead(PIN_GSM);
 	if (is_gsm_ready != g_init_gsm)
